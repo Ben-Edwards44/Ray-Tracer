@@ -3,6 +3,14 @@
 #include <vector>
 
 
+void check_error(cudaError_t error) {
+    if (error != cudaSuccess) {
+        std::string err_msg = cudaGetErrorString(error);
+        throw std::runtime_error("Error from CUDA: " + err_msg);
+    }
+}
+
+
 class CameraData {
     public:
         float3 position;
@@ -72,6 +80,21 @@ class CameraData {
 };
 
 
+class MeshData {
+    public:
+        std::vector<Sphere> spheres;
+
+        MeshData() {}
+
+        void add_sphere(std::vector<float> center, float radius) {
+            Vec3 c(center[0], center[1], center[2]);
+            Sphere sphere = {c, radius};
+
+            spheres.push_back(sphere);
+        }
+};
+
+
 template<typename T>
 class ReadWriteDeviceArray {
     public:
@@ -96,11 +119,40 @@ class ReadWriteDeviceArray {
         void allocate_unified_mem() {
             //allocate memory that can be accessed by both the gpu and cpu
             cudaError_t error = cudaMallocManaged(&array, mem_size);
+            check_error(error);
+        }
+};
 
-            if (error != cudaSuccess) {
-                std::string err_msg = cudaGetErrorString(error);
-                throw std::runtime_error("Error from CUDA: " + err_msg);
-            }
+
+template <typename T>
+class ReadOnlyDeviceArray {
+    public:
+        T *device_pointer;
+
+        ReadOnlyDeviceArray(std::vector<T> values) {
+            host_values = values;
+            mem_size = sizeof(T) * values.size();
+
+            allocate_mem();
+        }
+
+        void free_memory() {
+            //should be called after we have finished with the data
+            cudaFree(device_pointer);
+        }
+    
+    private:
+        int mem_size;
+        std::vector<T> host_values;
+
+        void allocate_mem() {
+            cudaError_t error = cudaMalloc((void **)&device_pointer, mem_size);  //allocate the memory
+            check_error(error);
+            
+            T *host_array = &host_values[0];  //get the pointer to the underlying array
+
+            error = cudaMemcpy(device_pointer, host_array, mem_size, cudaMemcpyHostToDevice);  //copy the value over
+            check_error(error);
         }
 };
 
@@ -128,24 +180,12 @@ class ReadOnlyDeviceValue {
 
         void allocate_mem() {
             cudaError_t error = cudaMalloc((void **)&device_pointer, mem_size);  //allocate the memory
+            check_error(error);
             
-            if (error != cudaSuccess) {
-                std::string err_msg = cudaGetErrorString(error);
-                throw std::runtime_error("Error from CUDA: " + err_msg);
-            }
-            
-            cudaMemcpy(device_pointer, host_value, mem_size, cudaMemcpyHostToDevice);  //copy the value over
+            error = cudaMemcpy(device_pointer, host_value, mem_size, cudaMemcpyHostToDevice);  //copy the value over
+            check_error(error);
         }
 };
-
-
-void check_cuda_error() {
-    cudaError_t error = cudaPeekAtLastError();
-
-    if (error != cudaSuccess) {
-        printf("Error from CUDA: %s\n", cudaGetErrorString(error));
-    }
-}
 
 
 dim3 get_block_size(int array_width, int array_height, dim3 thread_dim) {
@@ -157,16 +197,19 @@ dim3 get_block_size(int array_width, int array_height, dim3 thread_dim) {
 }
 
 
-void run_ray_tracer(CameraData *camera) {
+void run_ray_tracer(CameraData *camera, MeshData *mesh_data) {
     ReadWriteDeviceArray<float> image_pixels(camera->pixel_array_len);
 
     CamData cam_data = {camera->position, camera->tl_position, camera->focal_length, camera->delta_u, camera->delta_v, camera->image_width, camera->image_height};
     ReadOnlyDeviceValue<CamData> device_cam_data(cam_data);
 
+    ReadOnlyDeviceArray<Sphere> spheres(mesh_data->spheres);
+    ReadOnlyDeviceValue<int> num_spheres(mesh_data->spheres.size());
+
     dim3 thread_dim(4, 4);  //max is 1024
     dim3 block_dim = get_block_size(camera->image_width, camera->image_height, thread_dim);
 
-    get_pixel_colour<<<block_dim, thread_dim>>>(image_pixels.array, device_cam_data.device_pointer);  //launch kernel
+    get_pixel_colour<<<block_dim, thread_dim>>>(image_pixels.array, device_cam_data.device_pointer, spheres.device_pointer, num_spheres.device_pointer);  //launch kernel
 
     cudaDeviceSynchronize();  //wait until gpu has finished
 
@@ -177,11 +220,7 @@ void run_ray_tracer(CameraData *camera) {
 }
 
 
-CameraData get_camera_data() {
-    //read and parse the json file
-    JsonTree json(recieve_filename);
-    json.build_tree_from_file();
-
+CameraData get_camera_data(JsonTree json) {
     float focal_len = json["camera"]["focal_length"].get_data()[0];
     std::vector<float> view_dims = json["camera"]["viewport"]["dimensions"].get_data();
     std::vector<float> img_dims = json["camera"]["image"]["dimensions"].get_data();
@@ -193,13 +232,36 @@ CameraData get_camera_data() {
 }
 
 
-int main() {
-    CameraData camera = get_camera_data();
+MeshData get_mesh_data(JsonTree json) {
+    MeshData mesh_data;
 
-    run_ray_tracer(&camera);
+    int num_meshes = json["mesh_data"]["num_meshes"].get_data()[0];
+
+    for (int i = 0; i < num_meshes; i++) {
+        JsonTreeNode mesh = json["mesh_data"][std::to_string(i)];
+        int type = mesh["type"].get_data()[0];
+
+        if (type == 0) {
+            mesh_data.add_sphere(mesh["center"].get_data(), mesh["radius"].get_data()[0]);
+        }
+    }
+
+    return mesh_data;
+}
+
+
+int main() {
+    JsonTree json(recieve_filename);
+    json.build_tree_from_file();
+
+    CameraData camera = get_camera_data(json);
+    MeshData mesh_data = get_mesh_data(json);
+
+    run_ray_tracer(&camera, &mesh_data);
     send_pixel_data(camera.pixels);
 
-    check_cuda_error();
+    cudaError_t error = cudaPeekAtLastError();
+    check_error(error);
 
     return 0;
 }

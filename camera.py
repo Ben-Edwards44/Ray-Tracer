@@ -1,12 +1,11 @@
 import math
-import matrix
 
 
 class Camera:
     def __init__(self, pos, fov, aspect_ratio, focal_length, img_width):
         self.x, self.y, self.z = pos
 
-        self.fov = fov  #measured in radians
+        self.fov = math.radians(fov)
         self.aspect_ratio = aspect_ratio
         self.focal_length = focal_length
 

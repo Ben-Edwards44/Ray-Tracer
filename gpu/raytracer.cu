@@ -11,7 +11,7 @@ __device__ float3 operator-(float3 &a, float3 &b) {
 }
 
 
-__global__ struct CamData {
+__host__ __device__ struct CamData {
     //stored data needed by the device (calculated by the host)
     float3 pos;
     float3 tl_position;
@@ -26,13 +26,13 @@ __global__ struct CamData {
 };
 
 
-__device__ class Vec3 {
+__host__ __device__ class Vec3 {
     public:
         float x;
         float y;
         float z;
 
-        __device__ Vec3(float val_x, float val_y, float val_z) {
+        __host__ __device__ Vec3(float val_x, float val_y, float val_z) {
             x = val_x;
             y = val_y;
             z = val_z;
@@ -122,20 +122,48 @@ __device__ class Ray {
 };
 
 
-__device__ Vec3 get_ray_colour(Ray *ray) {
+__device__ struct RayHitData {
+    bool ray_hits;
+    float dist_from_origin;
+    Vec3 hit_point;
+    Vec3 normal_vec;
+};
+
+
+__host__ __device__ class Sphere {
+    public:
+        Vec3 center;
+        float radius;
+
+        __device__ RayHitData hit(Ray *ray) {
+            //ray-sphere intersection results in quadratic equation t^2(d⋅d)−2td⋅(C−Q)+(C−Q)⋅(C−Q)−r^2=0
+            //so we solve with quadratic formula
+            Vec3 c_min_q = center - ray->origin;
+
+            float a = ray->direction.dot(ray->direction);
+            float b = ray->direction.dot(c_min_q) * (-2);
+            float c = c_min_q.dot(c_min_q) - radius * radius;
+
+            float discriminant = b * b - 4 * a * c;
+
+            RayHitData hit_data;
+
+            hit_data.ray_hits = discriminant >= 0;
+
+            return hit_data;
+        }
+};
+
+
+__device__ Vec3 get_ray_colour(Ray *ray, Sphere *mesh_data, int *num_spheres) {
     //check sphere intersection
-    Vec3 center(0, 0, 2);
-    float r = 1;
+    bool hits = false;
+    for (int i = 0; i < *num_spheres; i++) {
+        RayHitData hit_data = mesh_data[i].hit(ray);
+        if (hit_data.ray_hits) {hits = true;}
+    }
 
-    Vec3 c_min_q = center - ray->origin;
-
-    float a = ray->direction.dot(ray->direction);
-    float b = (ray->direction * (-2)).dot(c_min_q);
-    float c = c_min_q.dot(c_min_q) - r * r;
-
-    bool intersects = b * b - 4 * a * c >= 0;
-
-    if (intersects) {
+    if (hits) {
         return Vec3(1, 1, 1);
     } else {
         return Vec3(0, 0, 0);
@@ -143,7 +171,7 @@ __device__ Vec3 get_ray_colour(Ray *ray) {
 }
 
 
-__global__ void get_pixel_colour(float *pixel_array, CamData *camera_data) {
+__global__ void get_pixel_colour(float *pixel_array, CamData *camera_data, Sphere *mesh_data, int *num_spheres) {
     int pixel_coord_x = threadIdx.x + blockIdx.x * blockDim.x;
     int pixel_coord_y = threadIdx.y + blockIdx.y * blockDim.y;
 
@@ -153,7 +181,7 @@ __global__ void get_pixel_colour(float *pixel_array, CamData *camera_data) {
     
     Ray ray(pixel_coord_x, pixel_coord_y, camera_data);
 
-    Vec3 colour = get_ray_colour(&ray);
+    Vec3 colour = get_ray_colour(&ray, mesh_data, num_spheres);
 
     pixel_array[array_index] = colour.x;
     pixel_array[array_index + 1] = colour.y;
