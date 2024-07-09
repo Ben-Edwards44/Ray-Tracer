@@ -86,9 +86,11 @@ class MeshData {
 
         MeshData() {}
 
-        void add_sphere(std::vector<float> center, float radius) {
-            Vec3 c(center[0], center[1], center[2]);
-            Sphere sphere = {c, radius};
+        void add_sphere(std::vector<float> center, float radius, std::vector<float> colour) {
+            Vec3 cent(center[0], center[1], center[2]);
+            Vec3 col(colour[0], colour[1], colour[2]);
+
+            Sphere sphere = {cent, radius, col};
 
             spheres.push_back(sphere);
         }
@@ -242,7 +244,7 @@ MeshData get_mesh_data(JsonTree json) {
         int type = mesh["type"].get_data()[0];
 
         if (type == 0) {
-            mesh_data.add_sphere(mesh["center"].get_data(), mesh["radius"].get_data()[0]);
+            mesh_data.add_sphere(mesh["center"].get_data(), mesh["radius"].get_data()[0], mesh["colour"].get_data());
         }
     }
 

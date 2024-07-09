@@ -95,8 +95,8 @@ __device__ class Ray {
             set_direction_origin(camera_data);
         }
 
-        __device__ Vec3 get_pos(float time) {
-            return origin + direction * time;
+        __device__ Vec3 get_pos(float dist) {
+            return origin + direction * dist;
         }
 
     private:
@@ -123,8 +123,8 @@ __device__ class Ray {
 
 
 __device__ struct RayHitData {
-    bool ray_hits;
-    float dist_from_origin;
+    bool ray_hits = false;
+    float ray_travelled_dist = INFINITY;
     Vec3 hit_point;
     Vec3 normal_vec;
 };
@@ -134,6 +134,8 @@ __host__ __device__ class Sphere {
     public:
         Vec3 center;
         float radius;
+
+        Vec3 colour;
 
         __device__ RayHitData hit(Ray *ray) {
             //ray-sphere intersection results in quadratic equation t^2(d⋅d)−2td⋅(C−Q)+(C−Q)⋅(C−Q)−r^2=0
@@ -147,8 +149,19 @@ __host__ __device__ class Sphere {
             float discriminant = b * b - 4 * a * c;
 
             RayHitData hit_data;
+            if (discriminant >= 0) {
+                float ray_dist = (-b - sqrt(discriminant)) / (2 * a);  //negative solution to equation
 
-            hit_data.ray_hits = discriminant >= 0;
+                //only render spheres in front of camera
+                if (ray_dist >= 0) {
+                    Vec3 hit_point = ray->get_pos(ray_dist);
+
+                    hit_data.ray_hits = true;
+                    hit_data.ray_travelled_dist = ray_dist;
+                    hit_data.hit_point = hit_point;
+                    hit_data.normal_vec = (hit_point - center).normalised();  //vector pointing from center to point of intersection
+                }
+            }
 
             return hit_data;
         }
@@ -157,14 +170,20 @@ __host__ __device__ class Sphere {
 
 __device__ Vec3 get_ray_colour(Ray *ray, Sphere *mesh_data, int *num_spheres) {
     //check sphere intersection
-    bool hits = false;
+    RayHitData hit_data;
+    Sphere hit_sphere;
     for (int i = 0; i < *num_spheres; i++) {
-        RayHitData hit_data = mesh_data[i].hit(ray);
-        if (hit_data.ray_hits) {hits = true;}
+        RayHitData current_hit = mesh_data[i].hit(ray);
+        
+        //check if this sphere is closest to camera
+        if (current_hit.ray_travelled_dist <= hit_data.ray_travelled_dist) {
+            hit_data = current_hit;
+            hit_sphere = mesh_data[i];
+        }
     }
 
-    if (hits) {
-        return Vec3(1, 1, 1);
+    if (hit_data.ray_hits) {
+        return hit_sphere.colour;
     } else {
         return Vec3(0, 0, 0);
     }

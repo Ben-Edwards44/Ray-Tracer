@@ -38,7 +38,7 @@ def main():
     cam = camera.Camera((0, 0, 0), 50, ASPECT_RATIO, 0.1, SCREEN_WIDTH)
     window = draw.create_window(cam.image.width, cam.image.height)
 
-    meshes = [mesh.Sphere(-0.5, 0, 2, 0.6), mesh.Sphere(0.8, 0, 2, 0.5)]
+    meshes = [mesh.Sphere((0.5, 0.5, 0.5), -0.5, 0, 2, 0.6), mesh.Sphere((1, 0, 0), 0.2, 0, 3, 0.5)]
 
     while True:
         send_data(cam, meshes)

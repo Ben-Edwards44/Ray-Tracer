@@ -1,13 +1,16 @@
 class Mesh:
     SPHERE_ID = 0
 
-    def __init__(self):
-        pass
+    def __init__(self, colour):
+        if type(colour) == list:
+            self.colour = colour
+        else:
+            self.colour = list(colour)
 
 
 class Sphere(Mesh):
-    def __init__(self, x, y, z, r):
-        super().__init__()
+    def __init__(self, colour, x, y, z, r):
+        super().__init__(colour)
 
         self.x = x
         self.y = y
@@ -18,5 +21,6 @@ class Sphere(Mesh):
         return {
             "type" : [Mesh.SPHERE_ID],
             "center" : [self.x, self.y, self.z],
-            "radius" : [self.radius]
+            "radius" : [self.radius],
+            "colour" : self.colour
         }
