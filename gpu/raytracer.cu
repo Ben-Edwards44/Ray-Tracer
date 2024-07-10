@@ -1,14 +1,4 @@
-#include <cmath>
-
-
-__device__ float3 operator+(float3 &a, float3 &b) {
-    return make_float3(a.x + b.x, a.y + b.y, a.z + b.z);
-}
-
-
-__device__ float3 operator-(float3 &a, float3 &b) {
-    return make_float3(a.x - b.x, a.y - b.y, a.z - b.z);
-}
+#include "utils.cu"
 
 
 __host__ __device__ struct CamData {
@@ -26,57 +16,11 @@ __host__ __device__ struct CamData {
 };
 
 
-__host__ __device__ class Vec3 {
-    public:
-        float x;
-        float y;
-        float z;
-
-        __host__ __device__ Vec3(float val_x, float val_y, float val_z) {
-            x = val_x;
-            y = val_y;
-            z = val_z;
-        }
-
-        __device__ Vec3(float3 vector) {
-            x = vector.x;
-            y = vector.y;
-            z = vector.z;
-        }
-
-        __device__ Vec3() {}
-
-        __device__ Vec3 operator+(Vec3 other_vec) {
-            return Vec3(x + other_vec.x, y + other_vec.y, z + other_vec.z);
-        }
-
-        __device__ Vec3 operator-(Vec3 other_vec) {
-            return Vec3(x - other_vec.x, y - other_vec.y, z - other_vec.z);
-        }
-
-        __device__ Vec3 operator*(float scalar) {
-            return Vec3(x * scalar, y * scalar, z * scalar);
-        }
-
-        __device__ float magnitude() {
-            float mag_sq = x * x + y * y + z * z;
-            return sqrt(mag_sq);
-        }
-
-        __device__ Vec3 normalised() {
-            float mag = magnitude();
-            Vec3 unit_vec(x / mag, y / mag, z / mag);
-
-            return unit_vec;
-        }
-
-        __device__ float dot(Vec3 other_vec) {
-            float new_x = x * other_vec.x;
-            float new_y = y * other_vec.y;
-            float new_z = z * other_vec.z;
-
-            return new_x + new_y + new_z;
-        }
+__device__ struct RayHitData {
+    bool ray_hits = false;
+    float ray_travelled_dist = INFINITY;
+    Vec3 hit_point;
+    Vec3 normal_vec;
 };
 
 
@@ -88,15 +32,39 @@ __device__ class Ray {
         Vec3 origin;
         Vec3 direction;
 
-        __device__ Ray(int p_x, int p_y, CamData *camera_data) {
+        RngData *rng_data;
+
+        __device__ Ray(int p_x, int p_y, CamData *camera_data, RngData data) {
             pixel_x = p_x;
             pixel_y = p_y;
+
+            rng_data = &data;
 
             set_direction_origin(camera_data);
         }
 
         __device__ Vec3 get_pos(float dist) {
             return origin + direction * dist;
+        }
+
+        __device__ void diffuse_reflect(RayHitData *hit_data) {
+            //diffuse reflect after hitting something
+            //direction = hit_data->normal_vec;
+            //return;
+
+            float dir_x = get_random_num(rng_data, 0);
+            float dir_y = get_random_num(rng_data, 1);
+            float dir_z = get_random_num(rng_data, 2);
+
+            Vec3 new_dir(dir_x, dir_y, dir_z);  //TODO: use method that does not clump up around corners
+
+            if (new_dir.dot(hit_data->normal_vec) < 0) {
+                new_dir = new_dir * -1;  //invert since we are reflecting inside the sphere
+            }
+
+            //assign the new values
+            origin = hit_data->hit_point;
+            direction = new_dir.normalised();
         }
 
     private:
@@ -122,11 +90,10 @@ __device__ class Ray {
 };
 
 
-__device__ struct RayHitData {
-    bool ray_hits = false;
-    float ray_travelled_dist = INFINITY;
-    Vec3 hit_point;
-    Vec3 normal_vec;
+__host__ __device__ struct Material {
+    Vec3 colour;
+    float emission_strength;
+    Vec3 emission_colour;
 };
 
 
@@ -135,7 +102,15 @@ __host__ __device__ class Sphere {
         Vec3 center;
         float radius;
 
-        Vec3 colour;
+        Material material;
+
+        __host__ Sphere(Vec3 cent, float r, Material mat) {
+            center = cent;
+            radius = r;
+            material = mat;
+        };
+
+        __device__ Sphere() {};
 
         __device__ RayHitData hit(Ray *ray) {
             //ray-sphere intersection results in quadratic equation t^2(d⋅d)−2td⋅(C−Q)+(C−Q)⋅(C−Q)−r^2=0
@@ -159,7 +134,7 @@ __host__ __device__ class Sphere {
                     hit_data.ray_hits = true;
                     hit_data.ray_travelled_dist = ray_dist;
                     hit_data.hit_point = hit_point;
-                    hit_data.normal_vec = (hit_point - center).normalised();  //vector pointing from center to point of intersection
+                    hit_data.normal_vec = (center - hit_point).normalised();  //vector pointing from center to point of intersection
                 }
             }
 
@@ -168,10 +143,16 @@ __host__ __device__ class Sphere {
 };
 
 
-__device__ Vec3 get_ray_colour(Ray *ray, Sphere *mesh_data, int *num_spheres) {
-    //check sphere intersection
+__device__ struct RayCollision {
+    RayHitData *hit_data;
+    Sphere *hit_sphere;
+};
+
+
+__device__ RayCollision get_ray_collision(Ray *ray, Sphere *mesh_data, int *num_spheres) {
     RayHitData hit_data;
     Sphere hit_sphere;
+
     for (int i = 0; i < *num_spheres; i++) {
         RayHitData current_hit = mesh_data[i].hit(ray);
         
@@ -182,25 +163,73 @@ __device__ Vec3 get_ray_colour(Ray *ray, Sphere *mesh_data, int *num_spheres) {
         }
     }
 
-    if (hit_data.ray_hits) {
-        return hit_sphere.colour;
+    return RayCollision{&hit_data, &hit_sphere};
+}
+
+
+__device__ Vec3 trace_ray(Ray *ray, Sphere *mesh_data, int *num_spheres, int *reflection_limit) {
+    Vec3 final_colour(0, 0, 0);
+    Vec3 current_ray_colour(1, 1, 1);
+
+    for (int _ = 0; _ < *reflection_limit; _++) {
+        RayCollision collision = get_ray_collision(ray, mesh_data, num_spheres);
+
+        if (!collision.hit_data->ray_hits) {break;}  //ray has not hit anything
+
+        ray->diffuse_reflect(collision.hit_data);
+
+        //return ray->direction * 0.5 + 0.5;
+
+        Material material = collision.hit_sphere->material;
+        Vec3 mat_emitted_light = material.emission_colour * material.emission_strength;  //TODO: precalculate
+
+        final_colour = final_colour + mat_emitted_light * current_ray_colour;
+        current_ray_colour = current_ray_colour * material.colour;
+    }
+
+    return final_colour;
+}
+
+
+__device__ Vec3 get_ray_colour(Ray *ray, Sphere *mesh_data, int *num_spheres, int *reflection_limit, int *rays_per_pixel) {
+    //check sphere intersection
+    return trace_ray(ray, mesh_data, num_spheres, rays_per_pixel);
+
+    Vec3 colour(0, 0, 0);
+
+    for (int _ = 0; _ < *rays_per_pixel; _++) {
+        Vec3 ray_colour = trace_ray(ray, mesh_data, num_spheres, reflection_limit);
+        colour = colour + ray_colour;
+    }
+
+    return colour / *rays_per_pixel;
+
+    //for testing
+    RayCollision hit_data = get_ray_collision(ray, mesh_data, num_spheres);
+
+    if (hit_data.hit_data->ray_hits) {
+        return hit_data.hit_data->normal_vec * 0.5 + 0.5;
     } else {
         return Vec3(0, 0, 0);
     }
 }
 
 
-__global__ void get_pixel_colour(float *pixel_array, CamData *camera_data, Sphere *mesh_data, int *num_spheres) {
+__global__ void get_pixel_colour(float *pixel_array, CamData *camera_data, Sphere *mesh_data, int *num_spheres, int *rng_seed, int *reflection_limit, int *rays_per_pixel) {
+    //TODO: the number of params in this function is simply obscene: use a struct to clean things up
+    
     int pixel_coord_x = threadIdx.x + blockIdx.x * blockDim.x;
     int pixel_coord_y = threadIdx.y + blockIdx.y * blockDim.y;
 
     if (pixel_coord_x >= camera_data->image_width || pixel_coord_y >= camera_data->image_height) {return;}  //account for grid size being too big
     
     int array_index = (pixel_coord_y * camera_data->image_width + pixel_coord_x) * 3;  //multiply by 3 to account for each pixel having r, b, g values
-    
-    Ray ray(pixel_coord_x, pixel_coord_y, camera_data);
 
-    Vec3 colour = get_ray_colour(&ray, mesh_data, num_spheres);
+    RngData rng_data{rng_seed, array_index};
+    
+    Ray ray(pixel_coord_x, pixel_coord_y, camera_data, rng_data);
+
+    Vec3 colour = get_ray_colour(&ray, mesh_data, num_spheres, reflection_limit, rays_per_pixel);
 
     pixel_array[array_index] = colour.x;
     pixel_array[array_index + 1] = colour.y;

@@ -9,6 +9,9 @@ ASPECT_RATIO = 2
 
 CUDA_FILEPATH = "gpu/main.cu"
 
+RAY_REFLECT_LIMIT = 10
+RAYS_PER_PIXEL = 10
+
 
 def run_raytracer(cuda_script):
     #assumes all the appropriate data has already been sent
@@ -27,18 +30,31 @@ def send_data(cam, meshes):
 
     data_to_send = {
         "camera" : cam.data_dict(),
-        "mesh_data" : mesh_data
+        "mesh_data" : mesh_data,
+        "ray_data" : {
+            "reflect_limit" : [RAY_REFLECT_LIMIT],
+            "rays_per_pixel" : [RAYS_PER_PIXEL]
+        }
     }
 
     api.send_to_cuda(data_to_send)
+
+
+def setup_scene():
+    light = mesh.Sphere((0, 0, 0), 2, (1, 1, 1), 0, 2.4, 1, 2)
+
+    sphere1 = mesh.Sphere((0, 0, 0.75), 0, (0, 0, 0), -0.5, 0, 3, 0.5)
+    sphere2 = mesh.Sphere((0, 0.6, 0), 0, (0, 0, 0), 1.2, -0.1, 2, 0.4)
+    sphere3 = mesh.Sphere((1, 0, 0), 0, (0, 0, 0), 0, -5, 4, 5)
+
+    return [light, sphere1, sphere2, sphere3]
 
 
 def main():
     cuda_script = cuda.CudaScript(CUDA_FILEPATH, False)
     cam = camera.Camera((0, 0, 0), 50, ASPECT_RATIO, 0.1, SCREEN_WIDTH)
     window = draw.create_window(cam.image.width, cam.image.height)
-
-    meshes = [mesh.Sphere((0.5, 0.5, 0.5), -0.5, 0, 2, 0.6), mesh.Sphere((1, 0, 0), 0.2, 0, 3, 0.5)]
+    meshes = setup_scene()
 
     while True:
         send_data(cam, meshes)

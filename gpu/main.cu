@@ -1,6 +1,8 @@
 #include "api.cpp"
 #include "raytracer.cu"
 #include <vector>
+#include <ctime>
+#include <random>
 
 
 void check_error(cudaError_t error) {
@@ -86,11 +88,10 @@ class MeshData {
 
         MeshData() {}
 
-        void add_sphere(std::vector<float> center, float radius, std::vector<float> colour) {
+        void add_sphere(std::vector<float> center, float radius, Material *material) {
             Vec3 cent(center[0], center[1], center[2]);
-            Vec3 col(colour[0], colour[1], colour[2]);
 
-            Sphere sphere = {cent, radius, col};
+            Sphere sphere(cent, radius, *material);
 
             spheres.push_back(sphere);
         }
@@ -199,7 +200,23 @@ dim3 get_block_size(int array_width, int array_height, dim3 thread_dim) {
 }
 
 
-void run_ray_tracer(CameraData *camera, MeshData *mesh_data) {
+std::vector<int> get_rand_nums(int num, int max) {
+    int seed = std::time(0);
+
+    std::default_random_engine rng(seed);
+    std::uniform_int_distribution distribution(0, max);
+
+    std::vector<int> random_nums;
+    for (int _ = 0; _ < 3; _++) {
+        int rand_num = distribution(rng);
+        random_nums.push_back(rand_num);
+    }
+
+    return random_nums;
+}
+
+
+void run_ray_tracer(CameraData *camera, MeshData *mesh_data, int reflect_limit, int rays_per_pixel) {
     ReadWriteDeviceArray<float> image_pixels(camera->pixel_array_len);
 
     CamData cam_data = {camera->position, camera->tl_position, camera->focal_length, camera->delta_u, camera->delta_v, camera->image_width, camera->image_height};
@@ -208,10 +225,16 @@ void run_ray_tracer(CameraData *camera, MeshData *mesh_data) {
     ReadOnlyDeviceArray<Sphere> spheres(mesh_data->spheres);
     ReadOnlyDeviceValue<int> num_spheres(mesh_data->spheres.size());
 
+    std::vector<int> random_seeds = get_rand_nums(3, 10000);
+    ReadOnlyDeviceArray<int> rng_seeds(random_seeds);
+
+    ReadOnlyDeviceValue<int> reflect_lim(reflect_limit);
+    ReadOnlyDeviceValue<int> rays_pp(rays_per_pixel);
+
     dim3 thread_dim(4, 4);  //max is 1024
     dim3 block_dim = get_block_size(camera->image_width, camera->image_height, thread_dim);
 
-    get_pixel_colour<<<block_dim, thread_dim>>>(image_pixels.array, device_cam_data.device_pointer, spheres.device_pointer, num_spheres.device_pointer);  //launch kernel
+    get_pixel_colour<<<block_dim, thread_dim>>>(image_pixels.array, device_cam_data.device_pointer, spheres.device_pointer, num_spheres.device_pointer, rng_seeds.device_pointer, reflect_lim.device_pointer, rays_pp.device_pointer);  //launch kernel
 
     cudaDeviceSynchronize();  //wait until gpu has finished
 
@@ -243,8 +266,17 @@ MeshData get_mesh_data(JsonTree json) {
         JsonTreeNode mesh = json["mesh_data"][std::to_string(i)];
         int type = mesh["type"].get_data()[0];
 
+        std::vector<float> mat_colour = mesh["material"]["colour"].get_data();
+        float mat_emit_strength = mesh["material"]["emission_strength"].get_data()[0];
+        std::vector<float> mat_emit_colour = mesh["material"]["emission_colour"].get_data();
+
+        Vec3 mat_c(mat_colour[0], mat_colour[1], mat_colour[2]);
+        Vec3 mat_e_c(mat_emit_colour[0], mat_emit_colour[1], mat_emit_colour[2]);
+
+        Material material{mat_c, mat_emit_strength, mat_e_c};
+
         if (type == 0) {
-            mesh_data.add_sphere(mesh["center"].get_data(), mesh["radius"].get_data()[0], mesh["colour"].get_data());
+            mesh_data.add_sphere(mesh["center"].get_data(), mesh["radius"].get_data()[0], &material);
         }
     }
 
@@ -258,8 +290,10 @@ int main() {
 
     CameraData camera = get_camera_data(json);
     MeshData mesh_data = get_mesh_data(json);
+    int reflect_limit = json["ray_data"]["reflect_limit"].get_data()[0];
+    int rays_per_pixel = json["ray_data"]["rays_per_pixel"].get_data()[0];
 
-    run_ray_tracer(&camera, &mesh_data);
+    run_ray_tracer(&camera, &mesh_data, reflect_limit, rays_per_pixel);
     send_pixel_data(camera.pixels);
 
     cudaError_t error = cudaPeekAtLastError();
