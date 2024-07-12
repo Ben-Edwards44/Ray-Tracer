@@ -2,14 +2,13 @@ import math
 
 
 class Camera:
-    def __init__(self, pos, fov, aspect_ratio, focal_length, img_width):
+    def __init__(self, pos, fov, focal_length, img_width, img_height):
         self.x, self.y, self.z = pos
 
         self.fov = math.radians(fov)
-        self.aspect_ratio = aspect_ratio
         self.focal_length = focal_length
 
-        self.image = Image(img_width, aspect_ratio)
+        self.image = Image(img_width, img_height)
         self.viewport = self.get_viewport()
 
     def get_viewport(self):
@@ -32,10 +31,10 @@ class Camera:
     
 
 class Image:
-    def __init__(self, width, ideal_aspect_ratio):
+    def __init__(self, width, height):
         self.width = width
-        self.height = int(width / ideal_aspect_ratio)
-        self.actual_aspect_ratio = self.width / self.height
+        self.height = height
+        self.aspect_ratio = self.width / self.height
 
     dimensions = lambda self: [self.width, self.height]
 
@@ -43,6 +42,6 @@ class Image:
 class Viewport:
     def __init__(self, height, image):
         self.height = height
-        self.width = height * image.actual_aspect_ratio
+        self.width = height * image.aspect_ratio
 
     dimensions = lambda self: [self.width, self.height]

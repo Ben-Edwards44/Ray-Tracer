@@ -1,7 +1,7 @@
 #include "api.cpp"
 #include "raytracer.cu"
 #include <vector>
-#include <ctime>
+#include <chrono>
 #include <random>
 
 
@@ -201,13 +201,16 @@ dim3 get_block_size(int array_width, int array_height, dim3 thread_dim) {
 
 
 std::vector<int> get_rand_nums(int num, int max) {
-    int seed = std::time(0);
+    //get ms since epoch
+    auto clock = std::chrono::system_clock::now();
+    auto duration = clock.time_since_epoch();
+    int seed = std::chrono::duration_cast<std::chrono::milliseconds>(duration).count() % 100000;
 
     std::default_random_engine rng(seed);
     std::uniform_int_distribution distribution(0, max);
 
     std::vector<int> random_nums;
-    for (int _ = 0; _ < 3; _++) {
+    for (int _ = 0; _ < num; _++) {
         int rand_num = distribution(rng);
         random_nums.push_back(rand_num);
     }
@@ -225,13 +228,13 @@ void run_ray_tracer(CameraData *camera, MeshData *mesh_data, int reflect_limit, 
     ReadOnlyDeviceArray<Sphere> spheres(mesh_data->spheres);
     ReadOnlyDeviceValue<int> num_spheres(mesh_data->spheres.size());
 
-    std::vector<int> random_seeds = get_rand_nums(3, 10000);
+    std::vector<int> random_seeds = get_rand_nums(3 * rays_per_pixel, 10000);
     ReadOnlyDeviceArray<int> rng_seeds(random_seeds);
 
     ReadOnlyDeviceValue<int> reflect_lim(reflect_limit);
     ReadOnlyDeviceValue<int> rays_pp(rays_per_pixel);
 
-    dim3 thread_dim(4, 4);  //max is 1024
+    dim3 thread_dim(8, 8);  //max is 1024
     dim3 block_dim = get_block_size(camera->image_width, camera->image_height, thread_dim);
 
     get_pixel_colour<<<block_dim, thread_dim>>>(image_pixels.array, device_cam_data.device_pointer, spheres.device_pointer, num_spheres.device_pointer, rng_seeds.device_pointer, reflect_lim.device_pointer, rays_pp.device_pointer);  //launch kernel

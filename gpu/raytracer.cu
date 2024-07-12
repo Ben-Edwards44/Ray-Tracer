@@ -47,14 +47,13 @@ __device__ class Ray {
             return origin + direction * dist;
         }
 
-        __device__ void diffuse_reflect(RayHitData *hit_data) {
+        __device__ void diffuse_reflect(RayHitData *hit_data, int ray_num) {
             //diffuse reflect after hitting something
-            //direction = hit_data->normal_vec;
-            //return;
+            int rng_seed_inx = ray_num * 3;
 
-            float dir_x = get_random_num(rng_data, 0);
-            float dir_y = get_random_num(rng_data, 1);
-            float dir_z = get_random_num(rng_data, 2);
+            float dir_x = get_random_num(rng_data, rng_seed_inx);
+            float dir_y = get_random_num(rng_data, rng_seed_inx + 1);
+            float dir_z = get_random_num(rng_data, rng_seed_inx + 2);
 
             Vec3 new_dir(dir_x, dir_y, dir_z);  //TODO: use method that does not clump up around corners
 
@@ -167,7 +166,7 @@ __device__ RayCollision get_ray_collision(Ray *ray, Sphere *mesh_data, int *num_
 }
 
 
-__device__ Vec3 trace_ray(Ray *ray, Sphere *mesh_data, int *num_spheres, int *reflection_limit) {
+__device__ Vec3 trace_ray(Ray *ray, Sphere *mesh_data, int *num_spheres, int *reflection_limit, int ray_num) {
     Vec3 final_colour(0, 0, 0);
     Vec3 current_ray_colour(1, 1, 1);
 
@@ -176,7 +175,7 @@ __device__ Vec3 trace_ray(Ray *ray, Sphere *mesh_data, int *num_spheres, int *re
 
         if (!collision.hit_data->ray_hits) {break;}  //ray has not hit anything
 
-        ray->diffuse_reflect(collision.hit_data);
+        ray->diffuse_reflect(collision.hit_data, ray_num);
 
         Material material = collision.hit_sphere->material;
         Vec3 mat_emitted_light = material.emission_colour * material.emission_strength;  //TODO: precalculate
@@ -191,27 +190,23 @@ __device__ Vec3 trace_ray(Ray *ray, Sphere *mesh_data, int *num_spheres, int *re
 
 __device__ Vec3 get_ray_colour(Ray ray, Sphere *mesh_data, int *num_spheres, int *reflection_limit, int *rays_per_pixel) {
     //check sphere intersection
-    //return trace_ray(ray, mesh_data, num_spheres, reflection_limit);
-
     Vec3 colour(0, 0, 0);
 
-    for (int _ = 0; _ < *rays_per_pixel; _++) {
+    for (int i = 0; i < *rays_per_pixel; i++) {
         //your using the same random number seeds each time (don't do this)
         Ray ray_copy = ray;
-        Vec3 ray_colour = trace_ray(&ray_copy, mesh_data, num_spheres, reflection_limit);
+        Vec3 ray_colour = trace_ray(&ray_copy, mesh_data, num_spheres, reflection_limit, i);
         colour = colour + ray_colour;
     }
 
     return colour / *rays_per_pixel;
+}
 
-    //for testing
-    //RayCollision hit_data = get_ray_collision(ray, mesh_data, num_spheres);
 
-    //if (hit_data.hit_data->ray_hits) {
-    //    return hit_data.hit_data->normal_vec * 0.5 + 0.5;
-    //} else {
-    //    return Vec3(0, 0, 0);
-    //}
+__device__ Vec3 rng_test(RngData *rng_data) {
+    float c = get_random_num(rng_data, 0);
+
+    return Vec3(c, c, c);
 }
 
 

@@ -39,7 +39,14 @@ class ScreenPixels:
                 flattened_inx = (x * self.width + i) * 3  #i and x are swapped because the incoming array will have been transposed
 
                 for y in range(3):
-                    self.pixel_array[i][x][y] = int(new_pixel_array[flattened_inx + y] * 255)
+                    pixel_colour = int(new_pixel_array[flattened_inx + y] * 255)
+
+                    if pixel_colour > 255:
+                        pixel_colour = 255
+                    elif pixel_colour < 0:
+                        pixel_colour = 0
+
+                    self.pixel_array[i][x][y] = pixel_colour
 
     def draw_to_screen(self):
         pygame.surfarray.blit_array(self.window, self.pixel_array)
