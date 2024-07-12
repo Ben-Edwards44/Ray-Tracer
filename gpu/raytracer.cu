@@ -51,11 +51,11 @@ __device__ class Ray {
             //diffuse reflect after hitting something
             int rng_seed_inx = ray_num * 3;
 
-            float dir_x = get_random_num(rng_data, rng_seed_inx);
-            float dir_y = get_random_num(rng_data, rng_seed_inx + 1);
-            float dir_z = get_random_num(rng_data, rng_seed_inx + 2);
+            float dir_x = get_normal_random_num(rng_data, rng_seed_inx);
+            float dir_y = get_normal_random_num(rng_data, rng_seed_inx + 1);
+            float dir_z = get_normal_random_num(rng_data, rng_seed_inx + 2);
 
-            Vec3 new_dir(dir_x, dir_y, dir_z);  //TODO: use method that does not clump up around corners
+            Vec3 new_dir(dir_x, dir_y, dir_z);
 
             if (new_dir.dot(hit_data->normal_vec) < 0) {
                 new_dir = new_dir * -1;  //invert since we are reflecting inside the sphere
@@ -200,13 +200,6 @@ __device__ Vec3 get_ray_colour(Ray ray, Sphere *mesh_data, int *num_spheres, int
     }
 
     return colour / *rays_per_pixel;
-}
-
-
-__device__ Vec3 rng_test(RngData *rng_data) {
-    float c = get_random_num(rng_data, 0);
-
-    return Vec3(c, c, c);
 }
 
 

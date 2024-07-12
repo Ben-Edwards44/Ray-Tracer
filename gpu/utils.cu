@@ -91,10 +91,10 @@ __device__ struct RngData {
 };
 
 
-__device__ float get_random_num(RngData *data, int seed_inx) {
-    //psuedorandom number generator
+__device__ float get_normal_random_num(RngData *data, int seed_inx) {
+    //get normally distributed pseudorandom number
     curandState state;
     curand_init(data->seeds[seed_inx], data->thread_index, 0, &state);
 
-    return curand_uniform(&state);
+    return curand_normal(&state);
 }
