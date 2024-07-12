@@ -9,8 +9,8 @@ ASPECT_RATIO = 2
 
 CUDA_FILEPATH = "gpu/main.cu"
 
-RAY_REFLECT_LIMIT = 10
-RAYS_PER_PIXEL = 10
+RAY_REFLECT_LIMIT = 5
+RAYS_PER_PIXEL = 1
 
 
 def run_raytracer(cuda_script):
@@ -41,7 +41,7 @@ def send_data(cam, meshes):
 
 
 def setup_scene():
-    light = mesh.Sphere((0, 0, 0), 2, (1, 1, 1), 0, 2.4, 1, 2)
+    light = mesh.Sphere((0.2, 0.2, 0.2), 2, (1, 1, 1), 0, 2.4, 1, 2)
 
     sphere1 = mesh.Sphere((0, 0, 0.75), 0, (0, 0, 0), -0.5, 0, 3, 0.5)
     sphere2 = mesh.Sphere((0, 0.6, 0), 0, (0, 0, 0), 1.2, -0.1, 2, 0.4)

@@ -134,7 +134,7 @@ __host__ __device__ class Sphere {
                     hit_data.ray_hits = true;
                     hit_data.ray_travelled_dist = ray_dist;
                     hit_data.hit_point = hit_point;
-                    hit_data.normal_vec = (center - hit_point).normalised();  //vector pointing from center to point of intersection
+                    hit_data.normal_vec = (hit_point - center).normalised();  //vector pointing from center to point of intersection
                 }
             }
 
@@ -178,8 +178,6 @@ __device__ Vec3 trace_ray(Ray *ray, Sphere *mesh_data, int *num_spheres, int *re
 
         ray->diffuse_reflect(collision.hit_data);
 
-        //return ray->direction * 0.5 + 0.5;
-
         Material material = collision.hit_sphere->material;
         Vec3 mat_emitted_light = material.emission_colour * material.emission_strength;  //TODO: precalculate
 
@@ -191,27 +189,29 @@ __device__ Vec3 trace_ray(Ray *ray, Sphere *mesh_data, int *num_spheres, int *re
 }
 
 
-__device__ Vec3 get_ray_colour(Ray *ray, Sphere *mesh_data, int *num_spheres, int *reflection_limit, int *rays_per_pixel) {
+__device__ Vec3 get_ray_colour(Ray ray, Sphere *mesh_data, int *num_spheres, int *reflection_limit, int *rays_per_pixel) {
     //check sphere intersection
-    return trace_ray(ray, mesh_data, num_spheres, rays_per_pixel);
+    //return trace_ray(ray, mesh_data, num_spheres, reflection_limit);
 
     Vec3 colour(0, 0, 0);
 
     for (int _ = 0; _ < *rays_per_pixel; _++) {
-        Vec3 ray_colour = trace_ray(ray, mesh_data, num_spheres, reflection_limit);
+        //your using the same random number seeds each time (don't do this)
+        Ray ray_copy = ray;
+        Vec3 ray_colour = trace_ray(&ray_copy, mesh_data, num_spheres, reflection_limit);
         colour = colour + ray_colour;
     }
 
     return colour / *rays_per_pixel;
 
     //for testing
-    RayCollision hit_data = get_ray_collision(ray, mesh_data, num_spheres);
+    //RayCollision hit_data = get_ray_collision(ray, mesh_data, num_spheres);
 
-    if (hit_data.hit_data->ray_hits) {
-        return hit_data.hit_data->normal_vec * 0.5 + 0.5;
-    } else {
-        return Vec3(0, 0, 0);
-    }
+    //if (hit_data.hit_data->ray_hits) {
+    //    return hit_data.hit_data->normal_vec * 0.5 + 0.5;
+    //} else {
+    //    return Vec3(0, 0, 0);
+    //}
 }
 
 
@@ -229,7 +229,7 @@ __global__ void get_pixel_colour(float *pixel_array, CamData *camera_data, Spher
     
     Ray ray(pixel_coord_x, pixel_coord_y, camera_data, rng_data);
 
-    Vec3 colour = get_ray_colour(&ray, mesh_data, num_spheres, reflection_limit, rays_per_pixel);
+    Vec3 colour = get_ray_colour(ray, mesh_data, num_spheres, reflection_limit, rays_per_pixel);
 
     pixel_array[array_index] = colour.x;
     pixel_array[array_index + 1] = colour.y;
