@@ -200,22 +200,13 @@ dim3 get_block_size(int array_width, int array_height, dim3 thread_dim) {
 }
 
 
-std::vector<int> get_rand_nums(int num, int max) {
+int get_time() {
     //get ms since epoch
     auto clock = std::chrono::system_clock::now();
     auto duration = clock.time_since_epoch();
-    int seed = std::chrono::duration_cast<std::chrono::milliseconds>(duration).count() % 100000;
+    int time = std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
 
-    std::default_random_engine rng(seed);
-    std::uniform_int_distribution distribution(0, max);
-
-    std::vector<int> random_nums;
-    for (int _ = 0; _ < num; _++) {
-        int rand_num = distribution(rng);
-        random_nums.push_back(rand_num);
-    }
-
-    return random_nums;
+    return time;
 }
 
 
@@ -228,16 +219,15 @@ void run_ray_tracer(CameraData *camera, MeshData *mesh_data, int reflect_limit, 
     ReadOnlyDeviceArray<Sphere> spheres(mesh_data->spheres);
     ReadOnlyDeviceValue<int> num_spheres(mesh_data->spheres.size());
 
-    std::vector<int> random_seeds = get_rand_nums(3 * rays_per_pixel, 10000);
-    ReadOnlyDeviceArray<int> rng_seeds(random_seeds);
+    ReadOnlyDeviceValue<int> current_time(get_time());
 
     ReadOnlyDeviceValue<int> reflect_lim(reflect_limit);
     ReadOnlyDeviceValue<int> rays_pp(rays_per_pixel);
 
-    dim3 thread_dim(8, 8);  //max is 1024
+    dim3 thread_dim(16, 16);  //max is 1024
     dim3 block_dim = get_block_size(camera->image_width, camera->image_height, thread_dim);
 
-    get_pixel_colour<<<block_dim, thread_dim>>>(image_pixels.array, device_cam_data.device_pointer, spheres.device_pointer, num_spheres.device_pointer, rng_seeds.device_pointer, reflect_lim.device_pointer, rays_pp.device_pointer);  //launch kernel
+    get_pixel_colour<<<block_dim, thread_dim>>>(image_pixels.array, device_cam_data.device_pointer, spheres.device_pointer, num_spheres.device_pointer, current_time.device_pointer, reflect_lim.device_pointer, rays_pp.device_pointer);  //launch kernel
 
     cudaDeviceSynchronize();  //wait until gpu has finished
 
@@ -296,7 +286,14 @@ int main() {
     int reflect_limit = json["ray_data"]["reflect_limit"].get_data()[0];
     int rays_per_pixel = json["ray_data"]["rays_per_pixel"].get_data()[0];
 
+    int start = get_time();
+
     run_ray_tracer(&camera, &mesh_data, reflect_limit, rays_per_pixel);
+
+    int end = get_time();
+
+    printf("Elapsed: %ums\n", end - start);
+
     send_pixel_data(camera.pixels);
 
     cudaError_t error = cudaPeekAtLastError();

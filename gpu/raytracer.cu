@@ -32,28 +32,26 @@ __device__ class Ray {
         Vec3 origin;
         Vec3 direction;
 
-        RngData *rng_data;
+        uint *rng_state;
 
-        __device__ Ray(int p_x, int p_y, CamData *camera_data, RngData data) {
+        __device__ Ray(int p_x, int p_y, CamData *camera_data, uint *state) {
             pixel_x = p_x;
             pixel_y = p_y;
 
-            rng_data = &data;
+            rng_state = state;
 
             set_direction_origin(camera_data);
         }
 
         __device__ Vec3 get_pos(float dist) {
-            return origin + direction * dist;
+            return direction * dist + origin;
         }
 
         __device__ void diffuse_reflect(RayHitData *hit_data, int ray_num) {
             //diffuse reflect after hitting something
-            int rng_seed_inx = ray_num * 3;
-
-            float dir_x = get_normal_random_num(rng_data, rng_seed_inx);
-            float dir_y = get_normal_random_num(rng_data, rng_seed_inx + 1);
-            float dir_z = get_normal_random_num(rng_data, rng_seed_inx + 2);
+            float dir_x = normally_dist_num(rng_state);
+            float dir_y = normally_dist_num(rng_state);
+            float dir_z = normally_dist_num(rng_state);
 
             Vec3 new_dir(dir_x, dir_y, dir_z);
 
@@ -203,7 +201,14 @@ __device__ Vec3 get_ray_colour(Ray ray, Sphere *mesh_data, int *num_spheres, int
 }
 
 
-__global__ void get_pixel_colour(float *pixel_array, CamData *camera_data, Sphere *mesh_data, int *num_spheres, int *rng_seed, int *reflection_limit, int *rays_per_pixel) {
+__device__ Vec3 prng_test(uint *rng_state) {
+    float r = pseudorandom_num(rng_state);
+
+    return Vec3(r, r, r);
+}
+
+
+__global__ void get_pixel_colour(float *pixel_array, CamData *camera_data, Sphere *mesh_data, int *num_spheres, int *current_time, int *reflection_limit, int *rays_per_pixel) {
     //TODO: the number of params in this function is simply obscene: use a struct to clean things up
     
     int pixel_coord_x = threadIdx.x + blockIdx.x * blockDim.x;
@@ -213,9 +218,9 @@ __global__ void get_pixel_colour(float *pixel_array, CamData *camera_data, Spher
     
     int array_index = (pixel_coord_y * camera_data->image_width + pixel_coord_x) * 3;  //multiply by 3 to account for each pixel having r, b, g values
 
-    RngData rng_data{rng_seed, array_index};
+    uint rng_state = array_index * 3145739 + *current_time * 6291469;
     
-    Ray ray(pixel_coord_x, pixel_coord_y, camera_data, rng_data);
+    Ray ray(pixel_coord_x, pixel_coord_y, camera_data, &rng_state);
 
     Vec3 colour = get_ray_colour(ray, mesh_data, num_spheres, reflection_limit, rays_per_pixel);
 

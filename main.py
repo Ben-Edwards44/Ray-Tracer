@@ -3,6 +3,8 @@ import mesh
 import camera
 from gpu import api, cuda
 
+from time import time
+
 
 SCREEN_WIDTH = 800
 SCREEN_HEIGHT = 500
@@ -10,12 +12,17 @@ SCREEN_HEIGHT = 500
 CUDA_FILEPATH = "gpu/main.cu"
 
 RAY_REFLECT_LIMIT = 3
-RAYS_PER_PIXEL = 10
+RAYS_PER_PIXEL = 100
 
 
 def run_raytracer(cuda_script):
     #assumes all the appropriate data has already been sent
+    start = time()
     cuda_script.run()
+    end = time()
+
+    print(f"Full elapsed: {end - start :.2f}s")
+
     recieved = api.recieve_from_cuda()
 
     return recieved
@@ -41,14 +48,14 @@ def send_data(cam, meshes):
 
 
 def setup_scene():
-    light1 = mesh.Sphere((0, 0, 0), 3, (1, 1, 1), 0, 2.5, 2.5, 2)
-    light2 = mesh.Sphere((0, 0, 0), 2, (1, 1, 1), -2, 0.2, 3, 1)
+    light1 = mesh.Sphere((0, 0, 0), 3, (1, 1, 1), 0, 2.6, 2.5, 2)
+    #light2 = mesh.Sphere((0, 0, 0), 2, (1, 1, 1), -2, 0.2, 3, 1)
 
-    sphere1 = mesh.Sphere((0, 0, 0), 5, (1, 1, 1), -0.5, 0, 3, 0.8)
-    sphere2 = mesh.Sphere((0, 0.6, 0), 0, (0, 0, 0), 1.2, -0.1, 2, 0.4)
-    sphere3 = mesh.Sphere((0.5, 0.2, 0), 0, (0, 0, 0), 0, -5, 4, 5)
+    sphere1 = mesh.Sphere((0, 0, 1), 0, (1, 1, 1), -0.5, 0, 3, 0.3)
+    sphere2 = mesh.Sphere((0, 1, 0), 0, (0, 0, 0), 1.2, -0.1, 2, 0.4)
+    sphere3 = mesh.Sphere((1, 0, 0), 0, (0, 0, 0), 0, -5, 4, 5)
 
-    return [sphere1, sphere2, sphere3]
+    return [light1, sphere1, sphere2, sphere3]
 
 
 def main():

@@ -1,5 +1,10 @@
 #include <cmath>
-#include <curand_kernel.h>
+
+
+//for pseudorandom number generator (C++ MINSTD)
+const int modulus = 1<<31 - 1;
+const int multiplier = 48271;
+const int increment = 0;
 
 
 //common overloads for working with float3 data types
@@ -42,8 +47,16 @@ __host__ __device__ class Vec3 {
             return Vec3(x + scalar, y + scalar, z + scalar);
         }
 
+        __device__ Vec3 operator+(Vec3 *other_vec) {
+            return Vec3(x + other_vec->x, y + other_vec->y, z + other_vec->z);
+        }
+
         __device__ Vec3 operator-(Vec3 other_vec) {
             return Vec3(x - other_vec.x, y - other_vec.y, z - other_vec.z);
+        }
+
+        __device__ Vec3 operator-(Vec3 *other_vec) {
+            return Vec3(x - other_vec->x, y - other_vec->y, z - other_vec->z);
         }
 
         __device__ Vec3 operator-(float scalar) {
@@ -57,6 +70,11 @@ __host__ __device__ class Vec3 {
         __device__ Vec3 operator*(Vec3 other_vec) {
             //element-wise multiplication
             return Vec3(x * other_vec.x, y * other_vec.y, z * other_vec.z);
+        }
+
+        __device__ Vec3 operator*(Vec3 *other_vec) {
+            //element-wise multiplication
+            return Vec3(x * other_vec->x, y * other_vec->y, z * other_vec->z);
         }
 
         __device__ Vec3 operator/(float scalar) {
@@ -82,19 +100,34 @@ __host__ __device__ class Vec3 {
 
             return new_x + new_y + new_z;
         }
+
+        __device__ float dot(Vec3 *other_vec) {
+            float new_x = x * other_vec->x;
+            float new_y = y * other_vec->y;
+            float new_z = z * other_vec->z;
+
+            return new_x + new_y + new_z;
+        }
 };
 
 
-__device__ struct RngData {
-    int *seeds;
-    int thread_index;
-};
+__device__ float pseudorandom_num(uint *state) {
+    //PCG prng
+    uint new_state = *state * 747796405 + 2891336453;
+    *state = new_state;
+
+	uint result = ((new_state >> ((new_state >> 28) + 4)) ^ new_state) * 277803737;
+	result = (result >> 22) ^ result;
+
+    float normalised = result / 4294967295.0;  //ensure between 0 and 1
+	
+    return normalised;
+}
 
 
-__device__ float get_normal_random_num(RngData *data, int seed_inx) {
-    //get normally distributed pseudorandom number
-    curandState state;
-    curand_init(data->seeds[seed_inx], data->thread_index, 0, &state);
-
-    return curand_normal(&state);
+__device__ float normally_dist_num(uint *state) {
+    //get a value in the standard normal distribution
+    float theta = 2 * 3.14159 * pseudorandom_num(state);
+    float rho = sqrt(-2 * log(pseudorandom_num(state)));
+    return rho * cos(theta);
 }
