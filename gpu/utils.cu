@@ -1,12 +1,6 @@
 #include <cmath>
 
 
-//for pseudorandom number generator (C++ MINSTD)
-const int modulus = 1<<31 - 1;
-const int multiplier = 48271;
-const int increment = 0;
-
-
 //common overloads for working with float3 data types
 __device__ float3 operator+(float3 &a, float3 &b) {
     return make_float3(a.x + b.x, a.y + b.y, a.z + b.z);
