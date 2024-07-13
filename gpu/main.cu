@@ -13,75 +13,6 @@ void check_error(cudaError_t error) {
 }
 
 
-class CameraData {
-    public:
-        float3 position;
-        float3 tl_position;
-
-        float focal_length;
-
-        float view_width;
-        float view_height;
-
-        int image_width;
-        int image_height;
-
-        int pixel_array_len;
-
-        float delta_u;
-        float delta_v;
-
-        std::vector<float> pixels;
-
-        CameraData(float focal_len, float view_w, float view_h, int image_w, int image_h, std::vector<float> pos) {
-            focal_length = focal_len;
-
-            view_width = view_w;
-            view_height = view_h;
-
-            image_width = image_w;
-            image_height = image_h;
-            pixel_array_len = image_width * image_height * 3;
-
-            set_pos(pos);
-            set_tl_position();
-            set_deltas();
-            set_pixels();
-        }
-
-        void update_pixels(float new_array[]) {
-            //assumes the array has the same size as the pixels vector
-            for (int i = 0; i < pixels.size(); i++) {
-                pixels[i] = new_array[i];
-            }
-        }
-
-    private:
-        void set_pos(std::vector<float> pos) {
-            position.x = pos[0];
-            position.y = pos[1];
-            position.z = pos[2];
-        }
-
-        void set_deltas() {
-            delta_u = view_width / image_width;
-            delta_v = view_height / image_height;
-        }
-
-        void set_pixels() {
-            std::vector<float> blank_screen(pixel_array_len, 1);
-            pixels = blank_screen;
-        }
-
-        void set_tl_position() {
-            //calc world position of top left pixel
-            tl_position.x = position.x - view_width / 2;
-            tl_position.y = position.y + view_height / 2;
-            tl_position.z = focal_length;
-        }
-};
-
-
 class MeshData {
     public:
         std::vector<Sphere> spheres;
@@ -210,43 +141,50 @@ int get_time() {
 }
 
 
-void run_ray_tracer(CameraData *camera, MeshData *mesh_data, int reflect_limit, int rays_per_pixel) {
-    ReadWriteDeviceArray<float> image_pixels(camera->pixel_array_len);
-
-    CamData cam_data = {camera->position, camera->tl_position, camera->focal_length, camera->delta_u, camera->delta_v, camera->image_width, camera->image_height};
-    ReadOnlyDeviceValue<CamData> device_cam_data(cam_data);
-
+std::vector<float> run_ray_tracer(CamData *cam_data, MeshData *mesh_data, RenderData *render_data) {    
+    ReadOnlyDeviceValue<CamData> device_cam_data(*cam_data);
     ReadOnlyDeviceArray<Sphere> spheres(mesh_data->spheres);
-    ReadOnlyDeviceValue<int> num_spheres(mesh_data->spheres.size());
+    ReadOnlyDeviceValue<RenderData> r_data(*render_data);
 
-    ReadOnlyDeviceValue<int> current_time(get_time());
-
-    ReadOnlyDeviceValue<int> reflect_lim(reflect_limit);
-    ReadOnlyDeviceValue<int> rays_pp(rays_per_pixel);
+    int len_pixel_array = cam_data->image_width * cam_data->image_height * 3;
+    ReadWriteDeviceArray<float> image_pixels(len_pixel_array);
 
     dim3 thread_dim(16, 16);  //max is 1024
-    dim3 block_dim = get_block_size(camera->image_width, camera->image_height, thread_dim);
+    dim3 block_dim = get_block_size(cam_data->image_width, cam_data->image_height, thread_dim);
 
-    get_pixel_colour<<<block_dim, thread_dim>>>(image_pixels.array, device_cam_data.device_pointer, spheres.device_pointer, num_spheres.device_pointer, current_time.device_pointer, reflect_lim.device_pointer, rays_pp.device_pointer);  //launch kernel
+    get_pixel_colour<<<block_dim, thread_dim>>>(image_pixels.array, device_cam_data.device_pointer, spheres.device_pointer, r_data.device_pointer);  //launch kernel
 
     cudaDeviceSynchronize();  //wait until gpu has finished
 
-    camera->update_pixels(image_pixels.array);  //need to do this before freeing up the memory
+    //copy pixel data before freeing memory
+    std::vector<float> resulting_pixels;
+    for (int i = 0; i < len_pixel_array; i++) {
+        resulting_pixels.push_back(image_pixels.array[i]);
+    }
 
     image_pixels.free_memory();
     device_cam_data.free_memory();
+
+    return resulting_pixels;
 }
 
 
-CameraData get_camera_data(JsonTree json) {
+CamData get_camera_data(JsonTree json) {
     float focal_len = json["camera"]["focal_length"].get_data()[0];
     std::vector<float> view_dims = json["camera"]["viewport"]["dimensions"].get_data();
     std::vector<float> img_dims = json["camera"]["image"]["dimensions"].get_data();
     std::vector<float> pos = json["camera"]["position"].get_data();
 
-    CameraData camera(focal_len, view_dims[0], view_dims[1], img_dims[0], img_dims[1], pos);
+    Vec3 cam_pos(pos[0], pos[1], pos[2]);
+    Vec3 tl_pos(cam_pos.x - view_dims[0] / 2, cam_pos.y + view_dims[1] / 2, cam_pos.z + focal_len);
 
-    return camera;
+    int img_width = img_dims[0];
+    int img_height = img_dims[1];
+
+    float delta_u = view_dims[0] / img_width;
+    float delta_v = view_dims[1] / img_height;
+
+    return CamData{cam_pos, tl_pos, focal_len, delta_u, delta_v, img_width, img_height};
 }
 
 
@@ -277,24 +215,32 @@ MeshData get_mesh_data(JsonTree json) {
 }
 
 
+RenderData get_render_data(JsonTree json, int num_spheres) {
+    int reflect_limit = json["ray_data"]["reflect_limit"].get_data()[0];
+    int rays_per_pixel = json["ray_data"]["rays_per_pixel"].get_data()[0];
+    int time = get_time();
+    
+    return RenderData {rays_per_pixel, reflect_limit, num_spheres, get_time()};
+}
+
+
 int main() {
     JsonTree json(recieve_filename);
     json.build_tree_from_file();
 
-    CameraData camera = get_camera_data(json);
+    CamData cam_data = get_camera_data(json);
     MeshData mesh_data = get_mesh_data(json);
-    int reflect_limit = json["ray_data"]["reflect_limit"].get_data()[0];
-    int rays_per_pixel = json["ray_data"]["rays_per_pixel"].get_data()[0];
+    RenderData render_data = get_render_data(json, mesh_data.spheres.size());
 
     int start = get_time();
 
-    run_ray_tracer(&camera, &mesh_data, reflect_limit, rays_per_pixel);
+    std::vector<float> pixel_colours = run_ray_tracer(&cam_data, &mesh_data, &render_data);
 
     int end = get_time();
 
     printf("Elapsed: %ums\n", end - start);
 
-    send_pixel_data(camera.pixels);
+    send_pixel_data(pixel_colours);
 
     cudaError_t error = cudaPeekAtLastError();
     check_error(error);

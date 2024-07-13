@@ -3,8 +3,8 @@
 
 __host__ __device__ struct CamData {
     //stored data needed by the device (calculated by the host)
-    float3 pos;
-    float3 tl_position;
+    Vec3 pos;
+    Vec3 tl_position;
 
     float focal_length;
 
@@ -13,6 +13,16 @@ __host__ __device__ struct CamData {
 
     int image_width;
     int image_height;
+};
+
+
+__host__ __device__ struct RenderData {
+    //data sent from host
+    int rays_per_pixel;
+    int reflection_limit;
+
+    int num_spheres;
+    int current_time;
 };
 
 
@@ -67,7 +77,7 @@ __device__ class Ray {
     private:
         __device__ Vec3 screen_to_world(int x, int y, CamData *camera_data) {
             //convert a point (x, y) on the viewport projection plane into a world space coordinate
-            float3 local_pos;
+            Vec3 local_pos;
 
             local_pos.x = x * camera_data->delta_u;
             local_pos.y = -y * camera_data->delta_v;
@@ -146,11 +156,11 @@ __device__ struct RayCollision {
 };
 
 
-__device__ RayCollision get_ray_collision(Ray *ray, Sphere *mesh_data, int *num_spheres) {
+__device__ RayCollision get_ray_collision(Ray *ray, Sphere *mesh_data, int num_spheres) {
     RayHitData hit_data;
     Sphere hit_sphere;
 
-    for (int i = 0; i < *num_spheres; i++) {
+    for (int i = 0; i < num_spheres; i++) {
         RayHitData current_hit = mesh_data[i].hit(ray);
         
         //check if this sphere is closest to camera
@@ -164,12 +174,12 @@ __device__ RayCollision get_ray_collision(Ray *ray, Sphere *mesh_data, int *num_
 }
 
 
-__device__ Vec3 trace_ray(Ray *ray, Sphere *mesh_data, int *num_spheres, int *reflection_limit, int ray_num) {
+__device__ Vec3 trace_ray(Ray *ray, Sphere *mesh_data, RenderData *render_data, int ray_num) {
     Vec3 final_colour(0, 0, 0);
     Vec3 current_ray_colour(1, 1, 1);
 
-    for (int _ = 0; _ < *reflection_limit; _++) {
-        RayCollision collision = get_ray_collision(ray, mesh_data, num_spheres);
+    for (int _ = 0; _ < render_data->reflection_limit; _++) {
+        RayCollision collision = get_ray_collision(ray, mesh_data, render_data->num_spheres);
 
         if (!collision.hit_data->ray_hits) {break;}  //ray has not hit anything
 
@@ -186,29 +196,22 @@ __device__ Vec3 trace_ray(Ray *ray, Sphere *mesh_data, int *num_spheres, int *re
 }
 
 
-__device__ Vec3 get_ray_colour(Ray ray, Sphere *mesh_data, int *num_spheres, int *reflection_limit, int *rays_per_pixel) {
+__device__ Vec3 get_ray_colour(Ray ray, Sphere *mesh_data, RenderData *render_data) {
     //check sphere intersection
     Vec3 colour(0, 0, 0);
 
-    for (int i = 0; i < *rays_per_pixel; i++) {
+    for (int i = 0; i < render_data->rays_per_pixel; i++) {
         //your using the same random number seeds each time (don't do this)
         Ray ray_copy = ray;
-        Vec3 ray_colour = trace_ray(&ray_copy, mesh_data, num_spheres, reflection_limit, i);
+        Vec3 ray_colour = trace_ray(&ray_copy, mesh_data, render_data, i);
         colour = colour + ray_colour;
     }
 
-    return colour / *rays_per_pixel;
+    return colour / render_data->rays_per_pixel;
 }
 
 
-__device__ Vec3 prng_test(uint *rng_state) {
-    float r = pseudorandom_num(rng_state);
-
-    return Vec3(r, r, r);
-}
-
-
-__global__ void get_pixel_colour(float *pixel_array, CamData *camera_data, Sphere *mesh_data, int *num_spheres, int *current_time, int *reflection_limit, int *rays_per_pixel) {
+__global__ void get_pixel_colour(float *pixel_array, CamData *camera_data, Sphere *mesh_data, RenderData *render_data) {
     //TODO: the number of params in this function is simply obscene: use a struct to clean things up
     
     int pixel_coord_x = threadIdx.x + blockIdx.x * blockDim.x;
@@ -218,11 +221,11 @@ __global__ void get_pixel_colour(float *pixel_array, CamData *camera_data, Spher
     
     int array_index = (pixel_coord_y * camera_data->image_width + pixel_coord_x) * 3;  //multiply by 3 to account for each pixel having r, b, g values
 
-    uint rng_state = array_index * 3145739 + *current_time * 6291469;
+    uint rng_state = array_index * 3145739 + render_data->current_time * 6291469;
     
     Ray ray(pixel_coord_x, pixel_coord_y, camera_data, &rng_state);
 
-    Vec3 colour = get_ray_colour(ray, mesh_data, num_spheres, reflection_limit, rays_per_pixel);
+    Vec3 colour = get_ray_colour(ray, mesh_data, render_data);
 
     pixel_array[array_index] = colour.x;
     pixel_array[array_index + 1] = colour.y;
