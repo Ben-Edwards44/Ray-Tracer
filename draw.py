@@ -55,7 +55,9 @@ class ScreenPixels:
 def check_user_input():
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
-            quit()
+            return True
+        
+    return False
 
 
 def draw_screen(window, pixel_data):

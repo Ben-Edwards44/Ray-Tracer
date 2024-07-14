@@ -3,8 +3,6 @@ import mesh
 import camera
 from gpu import api, cuda
 
-from time import time
-
 
 SCREEN_WIDTH = 800
 SCREEN_HEIGHT = 500
@@ -14,15 +12,12 @@ CUDA_FILEPATH = "gpu/main.cu"
 RAY_REFLECT_LIMIT = 3
 RAYS_PER_PIXEL = 100
 
+STATIC_SCENE = True
+
 
 def run_raytracer(cuda_script):
     #assumes all the appropriate data has already been sent
-    start = time()
-    cuda_script.run()
-    end = time()
-
-    print(f"Full elapsed: {end - start :.2f}s")
-
+    cuda_script.run(False)
     recieved = api.recieve_from_cuda()
 
     return recieved
@@ -41,7 +36,8 @@ def send_data(cam, meshes):
         "ray_data" : {
             "reflect_limit" : [RAY_REFLECT_LIMIT],
             "rays_per_pixel" : [RAYS_PER_PIXEL]
-        }
+        },
+        "static_scene" : [1] if STATIC_SCENE else [0]
     }
 
     api.send_to_cuda(data_to_send)
@@ -49,7 +45,6 @@ def send_data(cam, meshes):
 
 def setup_scene():
     light1 = mesh.Sphere((0, 0, 0), 3, (1, 1, 1), 0, 2.6, 2.5, 2)
-    #light2 = mesh.Sphere((0, 0, 0), 2, (1, 1, 1), -2, 0.2, 3, 1)
 
     sphere1 = mesh.Sphere((0, 0, 1), 0, (1, 1, 1), -0.5, 0, 3, 0.3)
     sphere2 = mesh.Sphere((0, 1, 0), 0, (0, 0, 0), 1.2, -0.1, 2, 0.4)
@@ -71,7 +66,12 @@ def main():
         pixels = raytracing_data["pixel_data"]
 
         draw.draw_screen(window, pixels)
-        draw.check_user_input()
+
+        exit = draw.check_user_input()
+
+        if exit:
+            cuda_script.kill_process()
+            break
 
 
 main()

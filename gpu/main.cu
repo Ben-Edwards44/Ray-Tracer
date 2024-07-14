@@ -122,6 +122,16 @@ class ReadOnlyDeviceValue {
 };
 
 
+struct DataToSend {
+    //data that must be sent to gpu
+    CamData cam_data;
+    MeshData mesh_data;
+    RenderData render_data;
+
+    bool static_scene = false;
+};
+
+
 dim3 get_block_size(int array_width, int array_height, dim3 thread_dim) {
     //we need to round up in cases where the array size is not divided exactly
     int blocks_x = array_width / thread_dim.x + 1;
@@ -141,18 +151,20 @@ int get_time() {
 }
 
 
-std::vector<float> run_ray_tracer(CamData *cam_data, MeshData *mesh_data, RenderData *render_data) {    
-    ReadOnlyDeviceValue<CamData> device_cam_data(*cam_data);
-    ReadOnlyDeviceArray<Sphere> spheres(mesh_data->spheres);
-    ReadOnlyDeviceValue<RenderData> r_data(*render_data);
+std::vector<float> run_ray_tracer(DataToSend *data_obj) {
+    //assign memory on the gpu 
+    ReadOnlyDeviceValue<CamData> device_cam_data(data_obj->cam_data);
+    ReadOnlyDeviceArray<Sphere> spheres(data_obj->mesh_data.spheres);
+    ReadOnlyDeviceValue<RenderData> r_data(data_obj->render_data);
+    ReadOnlyDeviceValue<int> current_time(get_time());
 
-    int len_pixel_array = cam_data->image_width * cam_data->image_height * 3;
+    int len_pixel_array = data_obj->cam_data.image_width * data_obj->cam_data.image_height * 3;
     ReadWriteDeviceArray<float> image_pixels(len_pixel_array);
 
     dim3 thread_dim(16, 16);  //max is 1024
-    dim3 block_dim = get_block_size(cam_data->image_width, cam_data->image_height, thread_dim);
+    dim3 block_dim = get_block_size(data_obj->cam_data.image_width, data_obj->cam_data.image_height, thread_dim);
 
-    get_pixel_colour<<<block_dim, thread_dim>>>(image_pixels.array, device_cam_data.device_pointer, spheres.device_pointer, r_data.device_pointer);  //launch kernel
+    get_pixel_colour<<<block_dim, thread_dim>>>(image_pixels.array, device_cam_data.device_pointer, spheres.device_pointer, r_data.device_pointer, current_time.device_pointer);  //launch kernel
 
     cudaDeviceSynchronize();  //wait until gpu has finished
 
@@ -218,13 +230,14 @@ MeshData get_mesh_data(JsonTree json) {
 RenderData get_render_data(JsonTree json, int num_spheres) {
     int reflect_limit = json["ray_data"]["reflect_limit"].get_data()[0];
     int rays_per_pixel = json["ray_data"]["rays_per_pixel"].get_data()[0];
-    int time = get_time();
     
-    return RenderData {rays_per_pixel, reflect_limit, num_spheres, get_time()};
+    return RenderData {rays_per_pixel, reflect_limit, num_spheres};
 }
 
 
-int main() {
+void update_data_to_send(DataToSend *data_obj) {
+    if (data_obj->static_scene) {return;}  //the data will be the same as before, no need to update it
+
     JsonTree json(recieve_filename);
     json.build_tree_from_file();
 
@@ -232,18 +245,41 @@ int main() {
     MeshData mesh_data = get_mesh_data(json);
     RenderData render_data = get_render_data(json, mesh_data.spheres.size());
 
-    int start = get_time();
+    bool static_scene = json["static_scene"].get_data()[0] == 1;
 
-    std::vector<float> pixel_colours = run_ray_tracer(&cam_data, &mesh_data, &render_data);
+    //assign the new values
+    data_obj->cam_data = cam_data;
+    data_obj->mesh_data = mesh_data;
+    data_obj->render_data = render_data;
+    data_obj->static_scene = static_scene;
+}
 
-    int end = get_time();
 
-    printf("Elapsed: %ums\n", end - start);
+void render(DataToSend *data_obj) {
+    update_data_to_send(data_obj);
 
+    std::vector<float> pixel_colours = run_ray_tracer(data_obj);
     send_pixel_data(pixel_colours);
 
     cudaError_t error = cudaPeekAtLastError();
     check_error(error);
+}
+
+
+int main() {
+    DataToSend data_obj;
+
+    std::string input;
+    while (true) {
+        std::cin >> input;
+
+        if (input == "render") {
+            render(&data_obj);
+            std::cout << "render_complete\n";
+        } else if (input == "quit") {
+            break;
+        }
+    }
 
     return 0;
 }

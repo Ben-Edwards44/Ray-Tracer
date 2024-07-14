@@ -22,7 +22,6 @@ __host__ __device__ struct RenderData {
     int reflection_limit;
 
     int num_spheres;
-    int current_time;
 };
 
 
@@ -211,7 +210,7 @@ __device__ Vec3 get_ray_colour(Ray ray, Sphere *mesh_data, RenderData *render_da
 }
 
 
-__global__ void get_pixel_colour(float *pixel_array, CamData *camera_data, Sphere *mesh_data, RenderData *render_data) {
+__global__ void get_pixel_colour(float *pixel_array, CamData *camera_data, Sphere *mesh_data, RenderData *render_data, int *current_time) {
     //TODO: the number of params in this function is simply obscene: use a struct to clean things up
     
     int pixel_coord_x = threadIdx.x + blockIdx.x * blockDim.x;
@@ -221,7 +220,7 @@ __global__ void get_pixel_colour(float *pixel_array, CamData *camera_data, Spher
     
     int array_index = (pixel_coord_y * camera_data->image_width + pixel_coord_x) * 3;  //multiply by 3 to account for each pixel having r, b, g values
 
-    uint rng_state = array_index * 3145739 + render_data->current_time * 6291469;
+    uint rng_state = array_index * 3145739 + *current_time * 6291469;
     
     Ray ray(pixel_coord_x, pixel_coord_y, camera_data, &rng_state);
 
