@@ -49,3 +49,9 @@ def recieve_from_cuda():
     data.load_from_file()
 
     return data.data_dictionary
+
+
+def clear_files():
+    #discard the results of any past renders (to be called on startup)
+    write_to_file(SEND_FILENAME, "")
+    write_to_file(RECIEVE_FILENAME, "")

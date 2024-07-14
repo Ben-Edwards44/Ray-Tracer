@@ -15,9 +15,16 @@ RAYS_PER_PIXEL = 100
 STATIC_SCENE = True
 
 
-def run_raytracer(cuda_script):
+def run_raytracer(cam, meshes, cuda_script, is_initial_run):
     #assumes all the appropriate data has already been sent
-    cuda_script.run(False)
+    needs_block = STATIC_SCENE and is_initial_run
+
+    if needs_block:
+        #we need to (re)send the data (it has either changed or never been sent at all)
+        send_data(cam, meshes)
+
+    cuda_script.run(needs_block)
+
     recieved = api.recieve_from_cuda()
 
     return recieved
@@ -54,16 +61,21 @@ def setup_scene():
 
 
 def main():
+    api.clear_files()
+
     cuda_script = cuda.CudaScript(CUDA_FILEPATH, False)
     cam = camera.Camera((0, 0, 0), 50, 0.1, SCREEN_WIDTH, SCREEN_HEIGHT)
     window = draw.create_window(cam.image.width, cam.image.height)
     meshes = setup_scene()
 
-    while True:
-        send_data(cam, meshes)
+    first_render = True
 
-        raytracing_data = run_raytracer(cuda_script)
+    while True:
+        raytracing_data = run_raytracer(cam, meshes, cuda_script, first_render)
         pixels = raytracing_data["pixel_data"]
+
+        if first_render:
+            first_render = False
 
         draw.draw_screen(window, pixels)
 

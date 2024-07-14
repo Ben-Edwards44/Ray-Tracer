@@ -22,6 +22,10 @@ __host__ __device__ struct RenderData {
     int reflection_limit;
 
     int num_spheres;
+
+    int frame_num;
+
+    bool static_scene;
 };
 
 
@@ -195,22 +199,29 @@ __device__ Vec3 trace_ray(Ray *ray, Sphere *mesh_data, RenderData *render_data, 
 }
 
 
-__device__ Vec3 get_ray_colour(Ray ray, Sphere *mesh_data, RenderData *render_data) {
+__device__ Vec3 get_ray_colour(Vec3 previous_colour, Ray ray, Sphere *mesh_data, RenderData *render_data) {
     //check sphere intersection
     Vec3 colour(0, 0, 0);
 
     for (int i = 0; i < render_data->rays_per_pixel; i++) {
-        //your using the same random number seeds each time (don't do this)
         Ray ray_copy = ray;
         Vec3 ray_colour = trace_ray(&ray_copy, mesh_data, render_data, i);
         colour = colour + ray_colour;
     }
 
-    return colour / render_data->rays_per_pixel;
+    colour = colour / render_data->rays_per_pixel;
+
+    if (render_data->static_scene && render_data->frame_num > 0) {
+        //use progressive rendering (take average of previous renders)
+        Vec3 previous_sum = previous_colour * render_data->frame_num;
+        return (colour + previous_sum) / (render_data->frame_num + 1);
+    } else {
+        return colour;
+    }
 }
 
 
-__global__ void get_pixel_colour(float *pixel_array, CamData *camera_data, Sphere *mesh_data, RenderData *render_data, int *current_time) {
+__global__ void get_pixel_colour(float *pixel_array, float *previous_render, CamData *camera_data, Sphere *mesh_data, RenderData *render_data, int *current_time) {
     //TODO: the number of params in this function is simply obscene: use a struct to clean things up
     
     int pixel_coord_x = threadIdx.x + blockIdx.x * blockDim.x;
@@ -220,11 +231,13 @@ __global__ void get_pixel_colour(float *pixel_array, CamData *camera_data, Spher
     
     int array_index = (pixel_coord_y * camera_data->image_width + pixel_coord_x) * 3;  //multiply by 3 to account for each pixel having r, b, g values
 
+    Vec3 previous_colour(previous_render[array_index], previous_render[array_index + 1], previous_render[array_index + 2]);
+
     uint rng_state = array_index * 3145739 + *current_time * 6291469;
-    
+
     Ray ray(pixel_coord_x, pixel_coord_y, camera_data, &rng_state);
 
-    Vec3 colour = get_ray_colour(ray, mesh_data, render_data);
+    Vec3 colour = get_ray_colour(previous_colour, ray, mesh_data, render_data);
 
     pixel_array[array_index] = colour.x;
     pixel_array[array_index + 1] = colour.y;

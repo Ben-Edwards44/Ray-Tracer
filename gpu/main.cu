@@ -128,7 +128,9 @@ struct DataToSend {
     MeshData mesh_data;
     RenderData render_data;
 
-    bool static_scene = false;
+    int len_pixel_array;
+
+    std::vector<float> previous_render;
 };
 
 
@@ -151,33 +153,32 @@ int get_time() {
 }
 
 
-std::vector<float> run_ray_tracer(DataToSend *data_obj) {
+void run_ray_tracer(DataToSend *data_obj) {
+    //run the raytacing script on the gpu and store the result in the data_obj previous_render
     //assign memory on the gpu 
     ReadOnlyDeviceValue<CamData> device_cam_data(data_obj->cam_data);
-    ReadOnlyDeviceArray<Sphere> spheres(data_obj->mesh_data.spheres);
     ReadOnlyDeviceValue<RenderData> r_data(data_obj->render_data);
     ReadOnlyDeviceValue<int> current_time(get_time());
 
-    int len_pixel_array = data_obj->cam_data.image_width * data_obj->cam_data.image_height * 3;
-    ReadWriteDeviceArray<float> image_pixels(len_pixel_array);
+    ReadOnlyDeviceArray<Sphere> spheres(data_obj->mesh_data.spheres);
+    ReadOnlyDeviceArray<float> previous_render(data_obj->previous_render);
+
+    ReadWriteDeviceArray<float> image_pixels(data_obj->len_pixel_array);
 
     dim3 thread_dim(16, 16);  //max is 1024
     dim3 block_dim = get_block_size(data_obj->cam_data.image_width, data_obj->cam_data.image_height, thread_dim);
 
-    get_pixel_colour<<<block_dim, thread_dim>>>(image_pixels.array, device_cam_data.device_pointer, spheres.device_pointer, r_data.device_pointer, current_time.device_pointer);  //launch kernel
+    get_pixel_colour<<<block_dim, thread_dim>>>(image_pixels.array, previous_render.device_pointer, device_cam_data.device_pointer, spheres.device_pointer, r_data.device_pointer, current_time.device_pointer);  //launch kernel
 
     cudaDeviceSynchronize();  //wait until gpu has finished
 
     //copy pixel data before freeing memory
-    std::vector<float> resulting_pixels;
-    for (int i = 0; i < len_pixel_array; i++) {
-        resulting_pixels.push_back(image_pixels.array[i]);
+    for (int i = 0; i < data_obj->len_pixel_array; i++) {
+        data_obj->previous_render[i] = image_pixels.array[i];
     }
 
     image_pixels.free_memory();
     device_cam_data.free_memory();
-
-    return resulting_pixels;
 }
 
 
@@ -230,13 +231,18 @@ MeshData get_mesh_data(JsonTree json) {
 RenderData get_render_data(JsonTree json, int num_spheres) {
     int reflect_limit = json["ray_data"]["reflect_limit"].get_data()[0];
     int rays_per_pixel = json["ray_data"]["rays_per_pixel"].get_data()[0];
+    bool static_scene = json["static_scene"].get_data()[0] == 1;
+
+    int start_frame_num = 0;
     
-    return RenderData {rays_per_pixel, reflect_limit, num_spheres};
+    return RenderData {rays_per_pixel, reflect_limit, num_spheres, start_frame_num, static_scene};
 }
 
 
 void update_data_to_send(DataToSend *data_obj) {
-    if (data_obj->static_scene) {return;}  //the data will be the same as before, no need to update it
+    data_obj->render_data.frame_num++;
+
+    if (data_obj->render_data.static_scene) {return;}  //the data will be the same as before, no need to update it
 
     JsonTree json(recieve_filename);
     json.build_tree_from_file();
@@ -245,21 +251,23 @@ void update_data_to_send(DataToSend *data_obj) {
     MeshData mesh_data = get_mesh_data(json);
     RenderData render_data = get_render_data(json, mesh_data.spheres.size());
 
-    bool static_scene = json["static_scene"].get_data()[0] == 1;
+    int len_pixel_array = cam_data.image_width * cam_data.image_height * 3;
+    std::vector<float> blank(len_pixel_array, 0);
 
     //assign the new values
     data_obj->cam_data = cam_data;
     data_obj->mesh_data = mesh_data;
     data_obj->render_data = render_data;
-    data_obj->static_scene = static_scene;
+    data_obj->len_pixel_array = len_pixel_array;
+    data_obj->previous_render = blank;
 }
 
 
 void render(DataToSend *data_obj) {
     update_data_to_send(data_obj);
 
-    std::vector<float> pixel_colours = run_ray_tracer(data_obj);
-    send_pixel_data(pixel_colours);
+    run_ray_tracer(data_obj);  //result stored in the previous render
+    send_pixel_data(data_obj->previous_render);
 
     cudaError_t error = cudaPeekAtLastError();
     check_error(error);
@@ -268,6 +276,9 @@ void render(DataToSend *data_obj) {
 
 int main() {
     DataToSend data_obj;
+
+    //set default values
+    data_obj.render_data.static_scene = false;
 
     std::string input;
     while (true) {
