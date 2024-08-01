@@ -60,7 +60,7 @@ __device__ class Ray {
             return direction * dist + origin;
         }
 
-        __device__ void diffuse_reflect(RayHitData *hit_data, int ray_num) {
+        __device__ void diffuse_reflect(RayHitData *hit_data) {
             //diffuse reflect after hitting something
             float dir_x = normally_dist_num(rng_state);
             float dir_y = normally_dist_num(rng_state);
@@ -76,6 +76,8 @@ __device__ class Ray {
             origin = hit_data->hit_point;
             direction = new_dir.normalised();
         }
+
+        //__device__ void perfect_reflect(RayHitData *hit_data, int ray)
 
     private:
         __device__ Vec3 screen_to_world(int x, int y, CamData *camera_data) {
@@ -177,7 +179,7 @@ __device__ RayCollision get_ray_collision(Ray *ray, Sphere *mesh_data, int num_s
 }
 
 
-__device__ Vec3 trace_ray(Ray *ray, Sphere *mesh_data, RenderData *render_data, int ray_num) {
+__device__ Vec3 trace_ray(Ray *ray, Sphere *mesh_data, RenderData *render_data) {
     Vec3 final_colour(0, 0, 0);
     Vec3 current_ray_colour(1, 1, 1);
 
@@ -186,7 +188,7 @@ __device__ Vec3 trace_ray(Ray *ray, Sphere *mesh_data, RenderData *render_data, 
 
         if (!collision.hit_data->ray_hits) {break;}  //ray has not hit anything
 
-        ray->diffuse_reflect(collision.hit_data, ray_num);
+        ray->diffuse_reflect(collision.hit_data);
 
         Material material = collision.hit_sphere->material;
         Vec3 mat_emitted_light = material.emission_colour * material.emission_strength;  //TODO: precalculate
@@ -203,9 +205,9 @@ __device__ Vec3 get_ray_colour(Vec3 previous_colour, Ray ray, Sphere *mesh_data,
     //check sphere intersection
     Vec3 colour(0, 0, 0);
 
-    for (int i = 0; i < render_data->rays_per_pixel; i++) {
+    for (int _ = 0; _ < render_data->rays_per_pixel; _++) {
         Ray ray_copy = ray;
-        Vec3 ray_colour = trace_ray(&ray_copy, mesh_data, render_data, i);
+        Vec3 ray_colour = trace_ray(&ray_copy, mesh_data, render_data);
         colour = colour + ray_colour;
     }
 

@@ -51,7 +51,7 @@ def send_data(cam, meshes):
 
 
 def setup_scene():
-    light1 = mesh.Sphere((0, 0, 0), 3, (1, 1, 1), 0, 2.6, 2.5, 2)
+    light1 = mesh.Sphere((0, 0, 0), 4, (1, 1, 1), 0, 3.1, 2.5, 2)
 
     sphere1 = mesh.Sphere((0, 0, 1), 0, (1, 1, 1), -0.5, 0, 3, 0.3)
     sphere2 = mesh.Sphere((0, 1, 0), 0, (0, 0, 0), 1.2, -0.1, 2, 0.4)
