@@ -233,9 +233,12 @@ RenderData get_render_data(JsonTree json, int num_spheres) {
     int rays_per_pixel = json["ray_data"]["rays_per_pixel"].get_data()[0];
     bool static_scene = json["static_scene"].get_data()[0] == 1;
 
+    std::vector<float> sky_colour = json["sky_colour"].get_data();
+    Vec3 sky_col_vec(sky_colour[0], sky_colour[1], sky_colour[2]);
+
     int start_frame_num = 0;
     
-    return RenderData {rays_per_pixel, reflect_limit, num_spheres, start_frame_num, static_scene};
+    return RenderData {rays_per_pixel, reflect_limit, num_spheres, start_frame_num, static_scene, sky_col_vec};
 }
 
 

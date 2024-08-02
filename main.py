@@ -9,10 +9,12 @@ SCREEN_HEIGHT = 500
 
 CUDA_FILEPATH = "gpu/main.cu"
 
-RAY_REFLECT_LIMIT = 3
+RAY_REFLECT_LIMIT = 5
 RAYS_PER_PIXEL = 100
 
 STATIC_SCENE = True
+
+SKY_COLOUR = (0.7, 0.7, 1)
 
 
 def run_raytracer(cam, meshes, cuda_script, is_initial_run):
@@ -44,20 +46,20 @@ def send_data(cam, meshes):
             "reflect_limit" : [RAY_REFLECT_LIMIT],
             "rays_per_pixel" : [RAYS_PER_PIXEL]
         },
-        "static_scene" : [1] if STATIC_SCENE else [0]
+        "static_scene" : [1] if STATIC_SCENE else [0],
+        "sky_colour" : list(SKY_COLOUR)
     }
 
     api.send_to_cuda(data_to_send)
 
 
 def setup_scene():
-    light1 = mesh.Sphere((0, 0, 0), 4, (1, 1, 1), 0, 3.1, 2.5, 2)
+    s1 = mesh.Sphere((0.8, 0.8, 0.8), 0, (0, 0, 0), -0.8, 0, 2.6, 0.5)
+    s2 = mesh.Sphere((0, 1, 0), 0, (0, 0, 0), 0.75, 0, 2.5, 0.5)
+    s3 = mesh.Sphere((0, 0, 1), 0, (0, 0, 0), 0, 0.5, 3, 0.6)
+    s4 = mesh.Sphere((1, 0, 0), 0, (0, 0, 0), 0, -5, 4, 5)
 
-    sphere1 = mesh.Sphere((0, 0, 1), 0, (1, 1, 1), -0.5, 0, 3, 0.3)
-    sphere2 = mesh.Sphere((0, 1, 0), 0, (0, 0, 0), 1.2, -0.1, 2, 0.4)
-    sphere3 = mesh.Sphere((1, 0, 0), 0, (0, 0, 0), 0, -5, 4, 5)
-
-    return [light1, sphere1, sphere2, sphere3]
+    return [s1, s2, s3, s4]
 
 
 def main():

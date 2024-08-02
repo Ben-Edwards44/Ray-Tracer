@@ -26,6 +26,8 @@ __host__ __device__ struct RenderData {
     int frame_num;
 
     bool static_scene;
+
+    Vec3 sky_colour;
 };
 
 
@@ -222,10 +224,8 @@ __device__ Vec3 trace_ray(Ray *ray, Sphere *mesh_data, RenderData *render_data) 
         RayCollision collision = get_ray_collision(ray, mesh_data, render_data->num_spheres);
 
         if (!collision.hit_data->ray_hits) {
-            //ray has not hit anything - sky
-            //Vec3 sky_light(0.6, 0.6, 0.8);
-            //final_colour = final_colour + sky_light * current_ray_colour;
-
+            //ray has not hit anything - it has hit sky
+            final_colour = final_colour + render_data->sky_colour * current_ray_colour;
             break;
         }
 
