@@ -64,8 +64,9 @@ __device__ class Ray {
             //reflect ray after hitting an object
 
             //TODO: decide whether to use diffuse or perfect
-            diffuse_reflect(hit_data);
+            //diffuse_reflect(hit_data);
             //perfect_reflect(hit_data);
+            true_lambertian_reflect(hit_data);
 
             origin = hit_data->hit_point;
         }
@@ -111,6 +112,23 @@ __device__ class Ray {
             Vec3 reflected_vec = direction - hit_data->normal_vec * 2 * dot;
 
             direction = reflected_vec;
+        }
+
+        __device__ void true_lambertian_reflect(RayHitData *hit_data) {
+            //reflected vector proportional to cos of the angle
+            float dir_x = normally_dist_num(rng_state);
+            float dir_y = normally_dist_num(rng_state);
+            float dir_z = normally_dist_num(rng_state);
+
+            Vec3 rand_dir(dir_x, dir_y, dir_z);
+
+            if (rand_dir.dot(hit_data->normal_vec) < 0) {
+                rand_dir = rand_dir * -1;  //invert since we are reflecting inside the sphere
+            }
+
+            Vec3 new_dir = hit_data->normal_vec + rand_dir;
+
+            direction = new_dir.normalised();
         }
 };
 
@@ -181,10 +199,12 @@ __device__ RayCollision get_ray_collision(Ray *ray, Sphere *mesh_data, int num_s
     for (int i = 0; i < num_spheres; i++) {
         RayHitData current_hit = mesh_data[i].hit(ray);
 
+        if (!current_hit.ray_hits) {continue;}
+
         bool closest_to_cam = current_hit.ray_travelled_dist <= hit_data.ray_travelled_dist;  //is this the closest to the camera so far?
         bool precision_error = -0.001 < current_hit.ray_travelled_dist < 0.001;  //floating point errors can cause a reflected ray to intersect with the same object twice (its origin is put just inside the object)
         
-        if (closest_to_cam && !precision_error && current_hit.ray_hits)  {
+        if (closest_to_cam && !precision_error)  {
             hit_data = current_hit;
             hit_sphere = mesh_data[i];
         }
