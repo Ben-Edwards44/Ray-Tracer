@@ -60,25 +60,15 @@ __device__ class Ray {
             return direction * dist + origin;
         }
 
-        __device__ void diffuse_reflect(RayHitData *hit_data) {
-            //diffuse reflect after hitting something
-            float dir_x = normally_dist_num(rng_state);
-            float dir_y = normally_dist_num(rng_state);
-            float dir_z = normally_dist_num(rng_state);
+        __device__ void reflect(RayHitData *hit_data) {
+            //reflect ray after hitting an object
 
-            Vec3 new_dir(dir_x, dir_y, dir_z);
+            //TODO: decide whether to use diffuse or perfect
+            diffuse_reflect(hit_data);
+            //perfect_reflect(hit_data);
 
-            if (new_dir.dot(hit_data->normal_vec) < 0) {
-                new_dir = new_dir * -1;  //invert since we are reflecting inside the sphere
-            }
-
-            //assign the new values
             origin = hit_data->hit_point;
-            direction = new_dir.normalised();
         }
-
-        //__device__ void perfect_reflect(RayHitData *hit_data, int ray)
-
     private:
         __device__ Vec3 screen_to_world(int x, int y, CamData *camera_data) {
             //convert a point (x, y) on the viewport projection plane into a world space coordinate
@@ -98,6 +88,29 @@ __device__ class Ray {
 
             origin = o;
             direction = dir.normalised();
+        }
+
+        __device__ void diffuse_reflect(RayHitData *hit_data) {
+            //diffuse reflect after hitting something
+            float dir_x = normally_dist_num(rng_state);
+            float dir_y = normally_dist_num(rng_state);
+            float dir_z = normally_dist_num(rng_state);
+
+            Vec3 new_dir(dir_x, dir_y, dir_z);
+
+            if (new_dir.dot(hit_data->normal_vec) < 0) {
+                new_dir = new_dir * -1;  //invert since we are reflecting inside the sphere
+            }
+
+            direction = new_dir.normalised();
+        }
+
+        __device__ void perfect_reflect(RayHitData *hit_data) {
+            //angle incidence = angle reflection: r=d−2(d⋅n)n (where d is incoming vector, n is normal and r in reflected)
+            float dot = direction.dot(hit_data->normal_vec);
+            Vec3 reflected_vec = direction - hit_data->normal_vec * 2 * dot;
+
+            direction = reflected_vec;
         }
 };
 
@@ -167,9 +180,11 @@ __device__ RayCollision get_ray_collision(Ray *ray, Sphere *mesh_data, int num_s
 
     for (int i = 0; i < num_spheres; i++) {
         RayHitData current_hit = mesh_data[i].hit(ray);
+
+        bool closest_to_cam = current_hit.ray_travelled_dist <= hit_data.ray_travelled_dist;  //is this the closest to the camera so far?
+        bool precision_error = -0.001 < current_hit.ray_travelled_dist < 0.001;  //floating point errors can cause a reflected ray to intersect with the same object twice (its origin is put just inside the object)
         
-        //check if this sphere is closest to camera
-        if (current_hit.ray_travelled_dist <= hit_data.ray_travelled_dist) {
+        if (closest_to_cam && !precision_error && current_hit.ray_hits)  {
             hit_data = current_hit;
             hit_sphere = mesh_data[i];
         }
@@ -186,9 +201,15 @@ __device__ Vec3 trace_ray(Ray *ray, Sphere *mesh_data, RenderData *render_data) 
     for (int _ = 0; _ < render_data->reflection_limit; _++) {
         RayCollision collision = get_ray_collision(ray, mesh_data, render_data->num_spheres);
 
-        if (!collision.hit_data->ray_hits) {break;}  //ray has not hit anything
+        if (!collision.hit_data->ray_hits) {
+            //ray has not hit anything - sky
+            //Vec3 sky_light(0.6, 0.6, 0.8);
+            //final_colour = final_colour + sky_light * current_ray_colour;
 
-        ray->diffuse_reflect(collision.hit_data);
+            break;
+        }
+
+        ray->reflect(collision.hit_data);
 
         Material material = collision.hit_sphere->material;
         Vec3 mat_emitted_light = material.emission_colour * material.emission_strength;  //TODO: precalculate
