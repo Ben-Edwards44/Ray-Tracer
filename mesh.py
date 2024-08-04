@@ -2,19 +2,22 @@ class Material:
     #type
     DIFFUSE = 0
     MIRROR = 1
+    METAL = 2
 
-    def __init__(self, colour, emit_strength, emit_colour, mat_type):
+    def __init__(self, colour, emit_strength, emit_colour, mat_type, options):
         self.colour = colour
         self.emit_strength = emit_strength
         self.emit_colour = emit_colour
         self.mat_type = mat_type
+        self.options = options
 
     def data_dict(self):
         return {
             "colour" : self.colour,
             "emission_strength" : [self.emit_strength],
             "emission_colour" : self.emit_colour,
-            "type" : [self.mat_type]
+            "type" : [self.mat_type],
+            "options" : self.options
         }
 
 

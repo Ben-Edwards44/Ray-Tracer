@@ -220,6 +220,11 @@ MeshData get_mesh_data(JsonTree json) {
 
         Material material{mat_c, mat_emit_strength, mat_e_c, mat_type};
 
+        //set material options (different depending on material type)
+        if (mat_type == 2) {
+            material.fuzz_level = mesh["material"]["options"]["fuzz_level"].get_data()[0];
+        }
+
         if (type == 0) {
             mesh_data.add_sphere(mesh["center"].get_data(), mesh["radius"].get_data()[0], &material);
         }

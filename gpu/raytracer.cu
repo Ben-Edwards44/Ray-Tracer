@@ -44,6 +44,9 @@ __host__ __device__ struct Material {
     float emission_strength;
     Vec3 emission_colour;
     int mat_type;
+
+    //optional
+    float fuzz_level;
 };
 
 
@@ -77,8 +80,11 @@ __device__ class Ray {
             if (obj_material.mat_type == 0) {
                 //diffuse_reflect(hit_data);
                 new_direction = true_lambertian_reflect(hit_data);
-            } else {
+            } else if (obj_material.mat_type == 1) {
                 new_direction = perfect_reflect(hit_data);
+            }
+            else {
+                new_direction = fuzzy_perfect_reflect(hit_data, obj_material);
             }
 
             direction = new_direction;
@@ -106,26 +112,19 @@ __device__ class Ray {
             direction = dir.normalised();
         }
 
-        __device__ Vec3 get_rand_vector(Vec3 normal_vec) {
-            //get a random outwards pointing vector
+        __device__ Vec3 diffuse_reflect(RayHitData *hit_data) {
+            //diffuse reflect after hitting something (just choose a random direction)
             float dir_x = normally_dist_num(rng_state);
             float dir_y = normally_dist_num(rng_state);
             float dir_z = normally_dist_num(rng_state);
 
             Vec3 rand_vec(dir_x, dir_y, dir_z);
 
-            if (rand_vec.dot(normal_vec) < 0) {
+            if (rand_vec.dot(hit_data->normal_vec) < 0) {
                 rand_vec = rand_vec * -1;  //invert since we want a vector that points outwards
             }
 
-            return rand_vec;
-        }
-
-        __device__ Vec3 diffuse_reflect(RayHitData *hit_data) {
-            //diffuse reflect after hitting something
-            Vec3 new_dir = get_rand_vector(hit_data->normal_vec);
-
-            return new_dir.normalised();
+            return rand_vec.normalised();
         }
 
         __device__ Vec3 true_lambertian_reflect(RayHitData *hit_data) {
@@ -142,6 +141,16 @@ __device__ class Ray {
             Vec3 reflected_vec = direction - hit_data->normal_vec * 2 * dot;
 
             return reflected_vec.normalised();
+        }
+
+        __device__ Vec3 fuzzy_perfect_reflect(RayHitData *hit_data, Material obj_material) {
+            //angle reflection = angle incidence + some noise
+            Vec3 reflected_vec = perfect_reflect(hit_data);
+            Vec3 rand_offset_vec = diffuse_reflect(hit_data) * obj_material.fuzz_level;
+
+            Vec3 new_dir = reflected_vec + rand_offset_vec;
+
+            return new_dir.normalised();
         }
 };
 

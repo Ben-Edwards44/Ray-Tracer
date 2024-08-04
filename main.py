@@ -54,12 +54,13 @@ def send_data(cam, meshes):
 
 
 def setup_scene():
-    dif_mat = mesh.Material((1, 0.2, 0.1), 0, (1, 0, 0), mesh.Material.DIFFUSE)
-    dif_mat2 = mesh.Material((0.2, 0.1, 1), 0, (0, 0, 0), mesh.Material.DIFFUSE)
-    ref_mat = mesh.Material((0.8, 0.8, 0.8), 0, (0, 0, 0), mesh.Material.MIRROR)
+    dif_mat = mesh.Material((1, 0.2, 0.1), 0, (1, 0, 0), mesh.Material.DIFFUSE, {})
+    dif_mat2 = mesh.Material((0.2, 0.1, 1), 0, (0, 0, 0), mesh.Material.DIFFUSE, {})
+    ref_mat = mesh.Material((0.8, 0.8, 0.8), 0, (0, 0, 0), mesh.Material.MIRROR, {})
+    metal_mat = mesh.Material((0.8, 0.8, 0.8), 0, (0, 0, 0), mesh.Material.METAL, {"fuzz_level" : [0.3]})
 
     s1 = mesh.Sphere(ref_mat, -1, 0, 2.2, 0.5)
-    s2 = mesh.Sphere(ref_mat, 1, 0, 2, 0.5)
+    s2 = mesh.Sphere(metal_mat, 1, 0, 2, 0.5)
     s3 = mesh.Sphere(dif_mat2, 0, 0, 2.1, 0.5)
     s4 = mesh.Sphere(dif_mat, 0, -5, 4, 5)
 
