@@ -39,6 +39,14 @@ __device__ struct RayHitData {
 };
 
 
+__host__ __device__ struct Material {
+    Vec3 colour;
+    float emission_strength;
+    Vec3 emission_colour;
+    int mat_type;
+};
+
+
 __device__ class Ray {
     public:
         int pixel_x;
@@ -62,16 +70,21 @@ __device__ class Ray {
             return direction * dist + origin;
         }
 
-        __device__ void reflect(RayHitData *hit_data) {
+        __device__ void reflect(RayHitData *hit_data, Material obj_material) {
             //reflect ray after hitting an object
 
-            //TODO: decide whether to use diffuse or perfect
-            //diffuse_reflect(hit_data);
-            //perfect_reflect(hit_data);
-            true_lambertian_reflect(hit_data);
+            Vec3 new_direction;
+            if (obj_material.mat_type == 0) {
+                //diffuse_reflect(hit_data);
+                new_direction = true_lambertian_reflect(hit_data);
+            } else {
+                new_direction = perfect_reflect(hit_data);
+            }
 
+            direction = new_direction;
             origin = hit_data->hit_point;
         }
+    
     private:
         __device__ Vec3 screen_to_world(int x, int y, CamData *camera_data) {
             //convert a point (x, y) on the viewport projection plane into a world space coordinate
@@ -93,52 +106,43 @@ __device__ class Ray {
             direction = dir.normalised();
         }
 
-        __device__ void diffuse_reflect(RayHitData *hit_data) {
-            //diffuse reflect after hitting something
+        __device__ Vec3 get_rand_vector(Vec3 normal_vec) {
+            //get a random outwards pointing vector
             float dir_x = normally_dist_num(rng_state);
             float dir_y = normally_dist_num(rng_state);
             float dir_z = normally_dist_num(rng_state);
 
-            Vec3 new_dir(dir_x, dir_y, dir_z);
+            Vec3 rand_vec(dir_x, dir_y, dir_z);
 
-            if (new_dir.dot(hit_data->normal_vec) < 0) {
-                new_dir = new_dir * -1;  //invert since we are reflecting inside the sphere
+            if (rand_vec.dot(normal_vec) < 0) {
+                rand_vec = rand_vec * -1;  //invert since we want a vector that points outwards
             }
 
-            direction = new_dir.normalised();
+            return rand_vec;
         }
 
-        __device__ void perfect_reflect(RayHitData *hit_data) {
+        __device__ Vec3 diffuse_reflect(RayHitData *hit_data) {
+            //diffuse reflect after hitting something
+            Vec3 new_dir = get_rand_vector(hit_data->normal_vec);
+
+            return new_dir.normalised();
+        }
+
+        __device__ Vec3 true_lambertian_reflect(RayHitData *hit_data) {
+            //reflected vector proportional to cos of the angle
+            Vec3 rand_offset_vec = diffuse_reflect(hit_data);
+            Vec3 new_dir = hit_data->normal_vec + rand_offset_vec;
+
+            return new_dir.normalised();
+        }
+
+        __device__ Vec3 perfect_reflect(RayHitData *hit_data) {
             //angle incidence = angle reflection: r=d−2(d⋅n)n (where d is incoming vector, n is normal and r in reflected)
             float dot = direction.dot(hit_data->normal_vec);
             Vec3 reflected_vec = direction - hit_data->normal_vec * 2 * dot;
 
-            direction = reflected_vec;
+            return reflected_vec.normalised();
         }
-
-        __device__ void true_lambertian_reflect(RayHitData *hit_data) {
-            //reflected vector proportional to cos of the angle
-            float dir_x = normally_dist_num(rng_state);
-            float dir_y = normally_dist_num(rng_state);
-            float dir_z = normally_dist_num(rng_state);
-
-            Vec3 rand_dir(dir_x, dir_y, dir_z);
-
-            if (rand_dir.dot(hit_data->normal_vec) < 0) {
-                rand_dir = rand_dir * -1;  //invert since we are reflecting inside the sphere
-            }
-
-            Vec3 new_dir = hit_data->normal_vec + rand_dir;
-
-            direction = new_dir.normalised();
-        }
-};
-
-
-__host__ __device__ struct Material {
-    Vec3 colour;
-    float emission_strength;
-    Vec3 emission_colour;
 };
 
 
@@ -229,7 +233,7 @@ __device__ Vec3 trace_ray(Ray *ray, Sphere *mesh_data, RenderData *render_data) 
             break;
         }
 
-        ray->reflect(collision.hit_data);
+        ray->reflect(collision.hit_data, collision.hit_sphere->material);
 
         Material material = collision.hit_sphere->material;
         Vec3 mat_emitted_light = material.emission_colour * material.emission_strength;  //TODO: precalculate
@@ -266,7 +270,7 @@ __device__ Vec3 get_ray_colour(Vec3 previous_colour, Ray ray, Sphere *mesh_data,
 
 __global__ void get_pixel_colour(float *pixel_array, float *previous_render, CamData *camera_data, Sphere *mesh_data, RenderData *render_data, int *current_time) {
     //TODO: the number of params in this function is simply obscene: use a struct to clean things up
-    
+
     int pixel_coord_x = threadIdx.x + blockIdx.x * blockDim.x;
     int pixel_coord_y = threadIdx.y + blockIdx.y * blockDim.y;
 

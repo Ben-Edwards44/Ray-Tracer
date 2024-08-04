@@ -213,11 +213,12 @@ MeshData get_mesh_data(JsonTree json) {
         std::vector<float> mat_colour = mesh["material"]["colour"].get_data();
         float mat_emit_strength = mesh["material"]["emission_strength"].get_data()[0];
         std::vector<float> mat_emit_colour = mesh["material"]["emission_colour"].get_data();
+        int mat_type = mesh["material"]["type"].get_data()[0];
 
         Vec3 mat_c(mat_colour[0], mat_colour[1], mat_colour[2]);
         Vec3 mat_e_c(mat_emit_colour[0], mat_emit_colour[1], mat_emit_colour[2]);
 
-        Material material{mat_c, mat_emit_strength, mat_e_c};
+        Material material{mat_c, mat_emit_strength, mat_e_c, mat_type};
 
         if (type == 0) {
             mesh_data.add_sphere(mesh["center"].get_data(), mesh["radius"].get_data()[0], &material);
