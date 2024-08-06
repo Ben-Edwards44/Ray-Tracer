@@ -1,7 +1,7 @@
 #include <cmath>
 #include <vector>
 #include <SFML/Graphics.hpp>
-#include "gpu/main.cu"
+#include "gpu/dispatch.cu"
 
 
 const int WIDTH = 800;
