@@ -157,6 +157,7 @@ void run_ray_tracer(Scene *scene, int current_time_ms) {
 void render(Scene *scene, int current_time_ms) {
     //run the ray tracer to render a scene and store the resulting pixel values in the previous_render in the scene object
     run_ray_tracer(scene, current_time_ms);  //result stored in the previous render
+    scene->render_data.frame_num++;
 
     cudaError_t error = cudaPeekAtLastError();
     check_error(error);
