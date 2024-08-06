@@ -6,7 +6,7 @@
 
 const int WIDTH = 800;
 const int HEIGHT = 500;
-const float ASPECT = static_cast<float>(WIDTH) / static_cast<float>(HEIGHT);
+const float ASPECT = static_cast<float>(WIDTH) / static_cast<float>(HEIGHT);  //static cast is used to stop integer division
 
 const std::string CAPTION = "ray tracer";
 
@@ -29,6 +29,7 @@ class Camera {
         float focal_len;
 
         void assign_default() {
+            //these values can be changed
             cam_pos.x = 0;
             cam_pos.y = 0;
             cam_pos.z = 0;
@@ -65,6 +66,7 @@ class Meshes {
         const int METAL = 2;
 
         void create_gpu_struct() {
+            //these spheres can be changed
             Material dif_mat{Vec3(1, 0.2, 0.1), 0, Vec3(0, 0, 0), DIFFUSE};
             Material dif_mat2{Vec3(0.2, 0.1, 1), 0, Vec3(0, 0, 0), DIFFUSE};
             Material ref_mat{Vec3(0.8, 0.8, 0.8), 0, Vec3(0, 0, 0), MIRROR};
@@ -102,6 +104,7 @@ class RenderSettings {
         Vec3 sky_colour;
 
         void assign_default() {
+            //these settings can be changed
             reflect_limit = 5;
             rays_per_pixel = 100;
             static_scene = true;
