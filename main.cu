@@ -207,7 +207,6 @@ int main() {
 
     Scene scene = create_scene(WIDTH, HEIGHT);
 
-    int frame_num = 0;
     int start_time = get_time();
 
     while (window.isOpen()) {
@@ -222,13 +221,13 @@ int main() {
         std::vector<float> pixel_colours = get_pixel_colours(&scene);
         draw_screen(&window, pixel_colours);
 
-        frame_num++;
+        int elapsed = get_time() - start_time;
+        float fps = 1000 / static_cast<float>(elapsed);
+        start_time = get_time();
+
+        printf("FPS: %f\r", fps);
+        fflush(stdout);  //since the \n character is not used, stdout must be manually flushed
     }
-
-    int elapsed = get_time() - start_time;
-    float fps = static_cast<float>(elapsed) / static_cast<float>(frame_num);
-
-    printf("FPS: %f\n", fps);
 
     return 0;
 }
