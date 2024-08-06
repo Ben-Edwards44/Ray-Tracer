@@ -149,7 +149,6 @@ std::vector<sf::Uint8> parse_pixel_colours(std::vector<float> pixel_colours) {
 
     for (int x = 0; x < WIDTH; x++) {
         for (int y = 0; y < HEIGHT; y++) {
-            //do stuff
             int pixel_colour_inx = (y * WIDTH + x) * 3;
             int result_inx = (y * WIDTH + x) * 4;
 
@@ -197,6 +196,7 @@ int main() {
     Scene scene = create_scene(WIDTH, HEIGHT);
 
     while (window.isOpen()) {
+        //check if the window has been closed
         sf::Event event;
         while (window.pollEvent(event)) {
             if (event.type == sf::Event::Closed) {
