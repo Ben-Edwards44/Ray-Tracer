@@ -1,5 +1,6 @@
 #include <cmath>
 #include <vector>
+#include <chrono>
 #include <SFML/Graphics.hpp>
 #include "gpu/dispatch.cu"
 
@@ -135,9 +136,20 @@ Scene create_scene(int img_width, int img_height) {
 }
 
 
+int get_time() {
+    //get ms since epoch
+    auto clock = std::chrono::system_clock::now();
+    auto duration = clock.time_since_epoch();
+    int time = std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
+
+    return time;
+}
+
+
 std::vector<float> get_pixel_colours(Scene *scene) {
     //get the pixel colours from the raytracer
-    render(scene);  //will update scene.previous_render
+    int time = get_time();
+    render(scene, time);  //will update scene.previous_render
 
     return scene->previous_render;
 }
@@ -195,6 +207,9 @@ int main() {
 
     Scene scene = create_scene(WIDTH, HEIGHT);
 
+    int frame_num = 0;
+    int start_time = get_time();
+
     while (window.isOpen()) {
         //check if the window has been closed
         sf::Event event;
@@ -206,7 +221,14 @@ int main() {
 
         std::vector<float> pixel_colours = get_pixel_colours(&scene);
         draw_screen(&window, pixel_colours);
+
+        frame_num++;
     }
+
+    int elapsed = get_time() - start_time;
+    float fps = static_cast<float>(elapsed) / static_cast<float>(frame_num);
+
+    printf("FPS: %f\n", fps);
 
     return 0;
 }

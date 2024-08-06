@@ -1,6 +1,5 @@
 #include "raytracer.cu"
 #include <vector>
-#include <chrono>
 #include <random>
 
 
@@ -126,22 +125,12 @@ dim3 get_block_size(int array_width, int array_height, dim3 thread_dim) {
 }
 
 
-int get_time() {
-    //get ms since epoch
-    auto clock = std::chrono::system_clock::now();
-    auto duration = clock.time_since_epoch();
-    int time = std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
-
-    return time;
-}
-
-
-void run_ray_tracer(Scene *scene) {
+void run_ray_tracer(Scene *scene, int current_time_ms) {
     //run the raytacing script on the gpu and store the result in the data_obj previous_render
     //assign memory on the gpu 
     ReadOnlyDeviceValue<CamData> device_cam_data(scene->cam_data);
     ReadOnlyDeviceValue<RenderData> r_data(scene->render_data);
-    ReadOnlyDeviceValue<int> current_time(get_time());
+    ReadOnlyDeviceValue<int> current_time(current_time_ms);
 
     ReadOnlyDeviceArray<Sphere> spheres(scene->spheres);
     ReadOnlyDeviceArray<float> prev_render(scene->previous_render);
@@ -165,9 +154,9 @@ void run_ray_tracer(Scene *scene) {
 }
 
 
-void render(Scene *scene) {
+void render(Scene *scene, int current_time_ms) {
     //run the ray tracer to render a scene and store the resulting pixel values in the previous_render in the scene object
-    run_ray_tracer(scene);  //result stored in the previous render
+    run_ray_tracer(scene, current_time_ms);  //result stored in the previous render
 
     cudaError_t error = cudaPeekAtLastError();
     check_error(error);
