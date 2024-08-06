@@ -1,7 +1,7 @@
 #include <cmath>
 
 
-__host__ __device__ class Vec3 {
+class Vec3 {
     public:
         float x;
         float y;
