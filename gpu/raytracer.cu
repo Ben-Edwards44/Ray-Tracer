@@ -1,7 +1,8 @@
 #include "utils.cu"
 
 
-const float INF = 100000;
+const int INF = 1 << 31 - 1;
+const float FLOAT_PRECISION_ERROR = 0.000001;
 
 
 __host__ __device__ struct CamData {
@@ -79,7 +80,6 @@ __device__ class Ray {
 
             Vec3 new_direction;
             if (obj_material.mat_type == 0) {
-                //diffuse_reflect(hit_data);
                 new_direction = true_lambertian_reflect(hit_data);
             } else if (obj_material.mat_type == 1) {
                 new_direction = perfect_reflect(hit_data);
@@ -192,11 +192,15 @@ __host__ __device__ class Sphere {
             float discriminant = b * b - 4 * a * c;
 
             RayHitData hit_data;
+            bool valid_hit = false;
+
             if (discriminant >= 0) {
                 float ray_dist = (-b - sqrt(discriminant)) / (2 * a);  //negative solution to equation
 
-                //only render spheres in front of camera
-                if (ray_dist >= 0) {
+                //only render spheres in front of ray
+                if (ray_dist > FLOAT_PRECISION_ERROR) {
+                    valid_hit = true;
+
                     Vec3 hit_point = ray->get_pos(ray_dist);
 
                     hit_data.ray_hits = true;
@@ -204,7 +208,10 @@ __host__ __device__ class Sphere {
                     hit_data.hit_point = hit_point;
                     hit_data.normal_vec = (hit_point - center).normalised();  //vector pointing from center to point of intersection
                 }
-            } else {
+            }
+
+            if (!valid_hit) {
+                //set the correct default values
                 hit_data.ray_hits = false;
                 hit_data.ray_travelled_dist = INF;
             }
@@ -248,17 +255,29 @@ __host__ __device__ class Triangle {
             bool ray_hits = num_outside == 0 || num_outside == 3;
 
             RayHitData hit_data;
-            hit_data.ray_hits = ray_hits;
+            bool valid_hit = false;
 
             if (ray_hits) {
-                hit_data.ray_travelled_dist = get_ray_travelled_dist(ray);
-                hit_data.hit_point = ray->get_pos(hit_data.ray_travelled_dist);
+                float ray_dist = get_ray_travelled_dist(ray);
 
-                Vec3 normal = normal_vec;
-                if (normal.dot(ray->direction) < 0) {normal = normal * -1;}  //normal should point in same direction as the ray
+                //only render triangles in front of ray
+                if (ray_dist > FLOAT_PRECISION_ERROR) {
+                    valid_hit = true;
 
-                hit_data.normal_vec = normal;
-            } else {
+                    hit_data.ray_hits = true;
+                    hit_data.ray_travelled_dist = ray_dist;
+                    hit_data.hit_point = ray->get_pos(hit_data.ray_travelled_dist);
+
+                    Vec3 normal = normal_vec;
+                    if (normal.dot(ray->direction) > 0) {normal = normal * -1;}  //normal should point in same direction as the ray
+
+                    hit_data.normal_vec = normal;
+                }
+            }
+
+            if (!valid_hit) {
+                //set correct default values
+                hit_data.ray_hits = false;
                 hit_data.ray_travelled_dist = INF;
             }
 
@@ -321,9 +340,9 @@ __device__ RayCollision get_specific_mesh_collision(Ray *ray, T *meshes, int num
         if (!current_hit.ray_hits) {continue;}
 
         bool closest_to_cam = current_hit.ray_travelled_dist <= hit_data.ray_travelled_dist;  //is this the closest to the camera so far?
-        bool precision_error = -0.001 < current_hit.ray_travelled_dist < 0.001;  //floating point errors can cause a reflected ray to intersect with the same object twice (its origin is put just inside the object)
+        bool precision_error = -FLOAT_PRECISION_ERROR < current_hit.ray_travelled_dist < FLOAT_PRECISION_ERROR;  //floating point errors can cause a reflected ray to intersect with the same object twice (its origin is put just inside the object)
         
-        if (closest_to_cam && !precision_error)  {
+        if (closest_to_cam && !precision_error) {
             hit_data = current_hit;
             hit_mesh_material = meshes[i].material;
         }
@@ -332,11 +351,14 @@ __device__ RayCollision get_specific_mesh_collision(Ray *ray, T *meshes, int num
     return RayCollision{hit_data, hit_mesh_material};
 }
 
+
 __device__ RayCollision get_ray_collision(Ray *ray, AllMeshes *meshes) {
     RayCollision triangle_collision = get_specific_mesh_collision<Triangle>(ray, meshes->triangles, meshes->num_triangles);
     RayCollision sphere_collision = get_specific_mesh_collision<Sphere>(ray, meshes->spheres, meshes->num_spheres);
 
-    if (triangle_collision.hit_data.ray_hits && triangle_collision.hit_data.ray_travelled_dist < sphere_collision.hit_data.ray_travelled_dist) {
+    bool tri_closer = triangle_collision.hit_data.ray_travelled_dist < sphere_collision.hit_data.ray_travelled_dist;
+
+    if (tri_closer && triangle_collision.hit_data.ray_hits) {
         return triangle_collision;
     } else {
         return sphere_collision;
@@ -356,9 +378,6 @@ __device__ Vec3 trace_ray(Ray *ray, AllMeshes *meshes, RenderData *render_data) 
             final_colour = final_colour + render_data->sky_colour * current_ray_colour;
             break;
         }
-
-        //final_colour = collision.hit_mesh_material.colour;
-        //break;
 
         ray->reflect(&collision.hit_data, collision.hit_mesh_material);
 

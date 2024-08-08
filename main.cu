@@ -68,7 +68,7 @@ class Meshes {
         const int METAL = 2;
 
         void create_gpu_struct() {
-            //these spheres can be changed
+            //these meshes can be changed
             Material dif_mat{Vec3(1, 0.2, 0.1), 0, Vec3(0, 0, 0), DIFFUSE};
             Material dif_mat2{Vec3(0.2, 0.1, 1), 0, Vec3(0, 0, 0), DIFFUSE};
             Material ref_mat{Vec3(0.8, 0.8, 0.8), 0, Vec3(0, 0, 0), MIRROR};
@@ -88,7 +88,7 @@ class Meshes {
             spheres.push_back(s5);
 
             Triangle t1(Vec3(-1, -0.6, 2), Vec3(1, 0.6, 2), Vec3(0.2, 0.3, 2), dif_mat);
-            Triangle t2(Vec3(1, -0.5, 3), Vec3(-0.8, -0.1, 2), Vec3(0, 0, 1), dif_mat2);
+            Triangle t2(Vec3(1, -0.5, 3), Vec3(-0.8, -0.1, 2), Vec3(0, 0, 1), ref_mat);
 
             triangles.push_back(t1);
             triangles.push_back(t2);
@@ -118,7 +118,7 @@ class RenderSettings {
             //these settings can be changed
             reflect_limit = 5;
             rays_per_pixel = 100;
-            static_scene = false;
+            static_scene = true;
 
             sky_colour.x = 0.87;
             sky_colour.y = 0.98;
