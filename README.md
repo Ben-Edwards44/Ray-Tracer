@@ -2,7 +2,9 @@
 
 A work in progress ray tracer made with CUDA.
 
-![example](/images/image.png)
+![example 1](/images/image1.png)
+![example 2](/images/image2.png)
+
 
 ## References
 

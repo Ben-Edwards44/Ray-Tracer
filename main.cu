@@ -87,11 +87,9 @@ class Meshes {
             spheres.push_back(s4);
             spheres.push_back(s5);
 
-            Triangle t1(Vec3(-1, -0.6, 2), Vec3(1, 0.6, 2), Vec3(0.2, 0.3, 2), dif_mat);
-            Triangle t2(Vec3(1, -0.5, 3), Vec3(-0.8, -0.1, 2), Vec3(0, 0, 1), ref_mat);
+            Triangle t1(Vec3(-0.5, -0.3, 1.5), Vec3(0.6, 1, 3.5), Vec3(0.5, -0.5, 2), met_mat);
 
             triangles.push_back(t1);
-            triangles.push_back(t2);
         }
 };
 
