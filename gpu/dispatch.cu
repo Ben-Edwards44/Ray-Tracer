@@ -164,8 +164,13 @@ void run_ray_tracer(Scene *scene, int current_time_ms) {
         scene->previous_render[i] = image_pixels.array[i];
     }
 
-    image_pixels.free_memory();
+    //free memory
     device_cam_data.free_memory();
+    r_data.free_memory();
+    current_time.free_memory();
+    prev_render.free_memory();
+    image_pixels.free_memory();
+    meshes.free_memory();
 }
 
 
