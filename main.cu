@@ -111,6 +111,7 @@ class RenderSettings {
         int rays_per_pixel;
 
         bool static_scene;
+        bool antialias;
 
         Vec3 sky_colour;
 
@@ -118,7 +119,9 @@ class RenderSettings {
             //these settings can be changed
             reflect_limit = 5;
             rays_per_pixel = 100;
+
             static_scene = true;
+            antialias = true;
 
             sky_colour.x = 0.87;
             sky_colour.y = 0.98;
@@ -128,7 +131,7 @@ class RenderSettings {
         RenderData create_gpu_struct(int num_spheres) {
             int start_frame_num = 0;
 
-            return RenderData{rays_per_pixel, reflect_limit, start_frame_num, static_scene, sky_colour};
+            return RenderData{rays_per_pixel, reflect_limit, start_frame_num, static_scene, antialias, sky_colour};
         }
 };
 

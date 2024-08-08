@@ -4,6 +4,8 @@
 const int INF = 1 << 31 - 1;
 const float FLOAT_PRECISION_ERROR = 0.000001;
 
+const float ANTIALIAS_OFFSET_RANGE = 0.001;
+
 
 __host__ __device__ struct CamData {
     //stored data needed by the device (calculated by the host)
@@ -28,6 +30,7 @@ __host__ __device__ struct RenderData {
     int frame_num;
 
     bool static_scene;
+    bool antialias;
 
     Vec3 sky_colour;
 };
@@ -62,11 +65,15 @@ __device__ class Ray {
 
         uint *rng_state;
 
-        __device__ Ray(int p_x, int p_y, CamData *camera_data, uint *state) {
+        bool antialias;
+
+        __device__ Ray(int p_x, int p_y, CamData *camera_data, uint *state, bool should_antialias) {
             pixel_x = p_x;
             pixel_y = p_y;
 
             rng_state = state;
+
+            antialias = should_antialias;
 
             set_direction_origin(camera_data);
         }
@@ -90,6 +97,19 @@ __device__ class Ray {
 
             direction = new_direction;
             origin = hit_data->hit_point;
+        }
+
+        __device__ void apply_antialias() {
+            if (!antialias) {return;}
+
+            //shift the direction of the ray slightly to smooth edges
+            float x_offset = (pseudorandom_num(rng_state) - 0.5) * 2 * ANTIALIAS_OFFSET_RANGE;
+            float y_offset = (pseudorandom_num(rng_state) - 0.5) * 2 * ANTIALIAS_OFFSET_RANGE;
+            float z_offset = (pseudorandom_num(rng_state) - 0.5) * 2 * ANTIALIAS_OFFSET_RANGE;
+
+            direction.x += x_offset;
+            direction.y += y_offset;
+            direction.z += z_offset;
         }
     
     private:
@@ -366,12 +386,14 @@ __device__ RayCollision get_ray_collision(Ray *ray, AllMeshes *meshes) {
 }
 
 
-__device__ Vec3 trace_ray(Ray *ray, AllMeshes *meshes, RenderData *render_data) {
+__device__ Vec3 trace_ray(Ray ray, AllMeshes *meshes, RenderData *render_data) {
     Vec3 final_colour(0, 0, 0);
     Vec3 current_ray_colour(1, 1, 1);
 
     for (int _ = 0; _ < render_data->reflection_limit; _++) {
-        RayCollision collision = get_ray_collision(ray, meshes);
+        ray.apply_antialias();
+
+        RayCollision collision = get_ray_collision(&ray, meshes);
 
         if (!collision.hit_data.ray_hits) {
             //ray has not hit anything - it has hit sky
@@ -379,7 +401,7 @@ __device__ Vec3 trace_ray(Ray *ray, AllMeshes *meshes, RenderData *render_data) 
             break;
         }
 
-        ray->reflect(&collision.hit_data, collision.hit_mesh_material);
+        ray.reflect(&collision.hit_data, collision.hit_mesh_material);
 
         Material material = collision.hit_mesh_material;
         Vec3 mat_emitted_light = material.emission_colour * material.emission_strength;  //TODO: precalculate
@@ -396,8 +418,7 @@ __device__ Vec3 get_ray_colour(Vec3 previous_colour, Ray ray, AllMeshes *meshes,
     Vec3 colour(0, 0, 0);
 
     for (int _ = 0; _ < render_data->rays_per_pixel; _++) {
-        Ray ray_copy = ray;
-        Vec3 ray_colour = trace_ray(&ray_copy, meshes, render_data);
+        Vec3 ray_colour = trace_ray(ray, meshes, render_data);  //passing by value copies the ray, so we can comfortably make changes to it
         colour = colour + ray_colour;
     }
 
@@ -426,7 +447,7 @@ __global__ void get_pixel_colour(float *pixel_array, float *previous_render, Cam
 
     uint rng_state = array_index * 3145739 + *current_time * 6291469;
 
-    Ray ray(pixel_coord_x, pixel_coord_y, camera_data, &rng_state);
+    Ray ray(pixel_coord_x, pixel_coord_y, camera_data, &rng_state, render_data->antialias);
 
     Vec3 colour = get_ray_colour(previous_colour, ray, mesh_data, render_data);
 
