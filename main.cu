@@ -56,6 +56,7 @@ class Camera {
 class Meshes {
     public:
         std::vector<Sphere> spheres;
+        std::vector<Triangle> triangles;
 
         Meshes() {
             create_gpu_struct();
@@ -72,16 +73,25 @@ class Meshes {
             Material dif_mat2{Vec3(0.2, 0.1, 1), 0, Vec3(0, 0, 0), DIFFUSE};
             Material ref_mat{Vec3(0.8, 0.8, 0.8), 0, Vec3(0, 0, 0), MIRROR};
             Material met_mat{Vec3(0.8, 0.8, 0.8), 0, Vec3(0, 0, 0), METAL, 0.3};
+            Material light_mat{Vec3(0, 0, 0), 2, Vec3(1, 1, 1), DIFFUSE};
 
             Sphere s1(Vec3(-1, 0, 2.2), 0.5, ref_mat);
             Sphere s2(Vec3(1, 0, 2), 0.5, met_mat);
             Sphere s3(Vec3(0, 0, 2.1), 0.5, dif_mat2);
             Sphere s4(Vec3(0, -5, 4), 5, dif_mat);
+            Sphere s5(Vec3(0, 1.6, 2), 1, light_mat);
 
             spheres.push_back(s1);
             spheres.push_back(s2);
             spheres.push_back(s3);
             spheres.push_back(s4);
+            spheres.push_back(s5);
+
+            Triangle t1(Vec3(-1, -0.6, 2), Vec3(1, 0.6, 2), Vec3(0.2, 0.3, 2), dif_mat);
+            Triangle t2(Vec3(1, -0.5, 3), Vec3(-0.8, -0.1, 2), Vec3(0, 0, 1), dif_mat2);
+
+            triangles.push_back(t1);
+            triangles.push_back(t2);
         }
 };
 
@@ -108,7 +118,7 @@ class RenderSettings {
             //these settings can be changed
             reflect_limit = 5;
             rays_per_pixel = 100;
-            static_scene = true;
+            static_scene = false;
 
             sky_colour.x = 0.87;
             sky_colour.y = 0.98;
@@ -118,7 +128,7 @@ class RenderSettings {
         RenderData create_gpu_struct(int num_spheres) {
             int start_frame_num = 0;
 
-            return RenderData{rays_per_pixel, reflect_limit, num_spheres, start_frame_num, static_scene, sky_colour};
+            return RenderData{rays_per_pixel, reflect_limit, start_frame_num, static_scene, sky_colour};
         }
 };
 
@@ -132,7 +142,7 @@ Scene create_scene(int img_width, int img_height) {
 
     std::vector<float> previous_render(len_pixel_array);
 
-    return Scene{cam.gpu_struct, render_settings.gpu_struct, meshes.spheres, len_pixel_array, previous_render};
+    return Scene{cam.gpu_struct, render_settings.gpu_struct, meshes.spheres, meshes.triangles, len_pixel_array, previous_render};
 }
 
 
@@ -225,7 +235,7 @@ int main() {
         float fps = 1000 / static_cast<float>(elapsed);
         start_time = get_time();
 
-        printf("FPS: %f\r", fps);
+        //printf("FPS: %f\r", fps);
         fflush(stdout);  //since the \n character is not used, stdout must be manually flushed
     }
 
