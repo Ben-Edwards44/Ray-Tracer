@@ -21,7 +21,7 @@ class Vec3 {
 
         __device__ Vec3() {}
 
-        //common operations
+        //common operations. TODO: overwrite +=, *= etc.
         __device__ Vec3 operator+(Vec3 other_vec) {
             return Vec3(x + other_vec.x, y + other_vec.y, z + other_vec.z);
         }
@@ -34,7 +34,7 @@ class Vec3 {
             return Vec3(x + other_vec->x, y + other_vec->y, z + other_vec->z);
         }
 
-        __device__ Vec3 operator-(Vec3 other_vec) {
+        __host__ __device__ Vec3 operator-(Vec3 other_vec) {
             return Vec3(x - other_vec.x, y - other_vec.y, z - other_vec.z);
         }
 
@@ -64,12 +64,12 @@ class Vec3 {
             return Vec3(x / scalar, y / scalar, z / scalar);
         }
 
-        __device__ float magnitude() {
+        __host__ __device__ float magnitude() {
             float mag_sq = x * x + y * y + z * z;
             return sqrt(mag_sq);
         }
 
-        __device__ Vec3 normalised() {
+        __host__ __device__ Vec3 normalised() {
             float mag = magnitude();
             Vec3 unit_vec(x / mag, y / mag, z / mag);
 
@@ -91,7 +91,16 @@ class Vec3 {
 
             return new_x + new_y + new_z;
         }
-};
+
+        __host__ __device__ Vec3 cross(Vec3 other_vec) {
+            //https://en.wikipedia.org/wiki/Cross_product
+            float s1 = y * other_vec.z - z * other_vec.y;
+            float s2 = z * other_vec.x - x * other_vec.z;
+            float s3 = x * other_vec.y - y * other_vec.x;
+
+            return Vec3(s1, s2, s3);
+        }
+}; 
 
 
 __device__ float pseudorandom_num(uint *state) {
