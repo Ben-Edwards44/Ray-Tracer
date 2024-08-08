@@ -8,6 +8,7 @@ struct Scene {
     RenderData render_data;
 
     std::vector<Sphere> spheres;
+    std::vector<Triangle> triangles;
 
     int len_pixel_array;
 
@@ -125,6 +126,19 @@ dim3 get_block_size(int array_width, int array_height, dim3 thread_dim) {
 }
 
 
+AllMeshes get_meshes(Scene *scene) {
+    ReadOnlyDeviceArray<Sphere> spheres(scene->spheres);
+    ReadOnlyDeviceArray<Triangle> triangles(scene->triangles);
+
+    int num_spheres = scene->spheres.size();
+    int num_triangles = scene->triangles.size();
+
+    AllMeshes meshes{spheres.device_pointer, triangles.device_pointer, num_spheres, num_triangles};
+
+    return meshes;
+}
+
+
 void run_ray_tracer(Scene *scene, int current_time_ms) {
     //run the raytacing script on the gpu and store the result in the data_obj previous_render
     //assign memory on the gpu 
@@ -132,15 +146,16 @@ void run_ray_tracer(Scene *scene, int current_time_ms) {
     ReadOnlyDeviceValue<RenderData> r_data(scene->render_data);
     ReadOnlyDeviceValue<int> current_time(current_time_ms);
 
-    ReadOnlyDeviceArray<Sphere> spheres(scene->spheres);
     ReadOnlyDeviceArray<float> prev_render(scene->previous_render);
 
     ReadWriteDeviceArray<float> image_pixels(scene->len_pixel_array);
 
+    ReadOnlyDeviceValue<AllMeshes> meshes(get_meshes(scene));
+
     dim3 thread_dim(16, 16);  //max is 1024
     dim3 block_dim = get_block_size(scene->cam_data.image_width, scene->cam_data.image_height, thread_dim);
 
-    get_pixel_colour<<<block_dim, thread_dim>>>(image_pixels.array, prev_render.device_pointer, device_cam_data.device_pointer, spheres.device_pointer, r_data.device_pointer, current_time.device_pointer);  //launch kernel
+    get_pixel_colour<<<block_dim, thread_dim>>>(image_pixels.array, prev_render.device_pointer, device_cam_data.device_pointer, meshes.device_pointer, r_data.device_pointer, current_time.device_pointer);  //launch kernel
 
     cudaDeviceSynchronize();  //wait until gpu has finished
 
