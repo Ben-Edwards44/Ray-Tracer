@@ -1,6 +1,9 @@
 #include "utils.cu"
 
 
+const float INF = 100000;
+
+
 __host__ __device__ struct CamData {
     //stored data needed by the device (calculated by the host)
     Vec3 pos;
@@ -41,8 +44,8 @@ __host__ __device__ struct Material {
 
 
 __device__ struct RayHitData {
-    bool ray_hits = false;
-    float ray_travelled_dist = INFINITY;
+    bool ray_hits;
+    float ray_travelled_dist;
     Vec3 hit_point;
     Vec3 normal_vec;
 };
@@ -201,6 +204,9 @@ __host__ __device__ class Sphere {
                     hit_data.hit_point = hit_point;
                     hit_data.normal_vec = (hit_point - center).normalised();  //vector pointing from center to point of intersection
                 }
+            } else {
+                hit_data.ray_hits = false;
+                hit_data.ray_travelled_dist = INF;
             }
 
             return hit_data;
@@ -252,6 +258,8 @@ __host__ __device__ class Triangle {
                 if (normal.dot(ray->direction) < 0) {normal = normal * -1;}  //normal should point in same direction as the ray
 
                 hit_data.normal_vec = normal;
+            } else {
+                hit_data.ray_travelled_dist = INF;
             }
 
             return hit_data;
@@ -292,16 +300,20 @@ __device__ struct AllMeshes {
 
 
 __device__ struct RayCollision {
-    RayHitData *hit_data;
+    RayHitData hit_data;
     Material hit_mesh_material;
 };
 
 
 template <typename T>
 __device__ RayCollision get_specific_mesh_collision(Ray *ray, T *meshes, int num_meshes) {
-    //get the closest collision with a specific mesh (e.g. sphere, triangle)
+    //get the closest collision with a specific mesh (e.g. sphere, triangle). NOTE: error occurs if there are no meshes
     RayHitData hit_data;
     Material hit_mesh_material;
+
+    //in the case where no collisions are found, the hit_data struct may have nonsense default values. So we set sensible ones here
+    hit_data.ray_hits = false;
+    hit_data.ray_travelled_dist = INF;
 
     for (int i = 0; i < num_meshes; i++) {
         RayHitData current_hit = meshes[i].hit(ray);
@@ -317,14 +329,18 @@ __device__ RayCollision get_specific_mesh_collision(Ray *ray, T *meshes, int num
         }
     }
 
-    return RayCollision{&hit_data, hit_mesh_material};
+    return RayCollision{hit_data, hit_mesh_material};
 }
 
 __device__ RayCollision get_ray_collision(Ray *ray, AllMeshes *meshes) {
-    RayCollision sphere_collision = get_specific_mesh_collision<Sphere>(ray, meshes->spheres, meshes->num_spheres);
     RayCollision triangle_collision = get_specific_mesh_collision<Triangle>(ray, meshes->triangles, meshes->num_triangles);
+    RayCollision sphere_collision = get_specific_mesh_collision<Sphere>(ray, meshes->spheres, meshes->num_spheres);
 
-    return sphere_collision;
+    if (triangle_collision.hit_data.ray_hits && triangle_collision.hit_data.ray_travelled_dist < sphere_collision.hit_data.ray_travelled_dist) {
+        return triangle_collision;
+    } else {
+        return sphere_collision;
+    }
 }
 
 
@@ -335,13 +351,16 @@ __device__ Vec3 trace_ray(Ray *ray, AllMeshes *meshes, RenderData *render_data) 
     for (int _ = 0; _ < render_data->reflection_limit; _++) {
         RayCollision collision = get_ray_collision(ray, meshes);
 
-        if (!collision.hit_data->ray_hits) {
+        if (!collision.hit_data.ray_hits) {
             //ray has not hit anything - it has hit sky
             final_colour = final_colour + render_data->sky_colour * current_ray_colour;
             break;
         }
 
-        ray->reflect(collision.hit_data, collision.hit_mesh_material);
+        //final_colour = collision.hit_mesh_material.colour;
+        //break;
+
+        ray->reflect(&collision.hit_data, collision.hit_mesh_material);
 
         Material material = collision.hit_mesh_material;
         Vec3 mat_emitted_light = material.emission_colour * material.emission_strength;  //TODO: precalculate
