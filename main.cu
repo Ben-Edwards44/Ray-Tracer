@@ -236,7 +236,7 @@ int main() {
         float fps = 1000 / static_cast<float>(elapsed);
         start_time = get_time();
 
-        //printf("FPS: %f\r", fps);
+        printf("FPS: %f\r", fps);
         fflush(stdout);  //since the \n character is not used, stdout must be manually flushed
     }
 
