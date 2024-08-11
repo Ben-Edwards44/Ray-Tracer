@@ -4,7 +4,7 @@
 
 std::vector<std::string> read_file(std::string filename) {
     std::ifstream file(filename);
-    if (!file) {throw std::logic_error("Could not find file to open.");}
+    if (!file) {throw std::runtime_error("Could not find file to open.");}
 
     std::vector<std::string> lines;
 
@@ -41,6 +41,99 @@ std::vector<std::string> split_string(std::string str, char split_char) {
 }
 
 
+class Matrix {
+    public:
+        int rows;
+        int cols;
+
+        std::vector<std::vector<float>> items;
+
+        Matrix() {}
+
+        Matrix(int num_row, int num_col) {
+            rows = num_row;
+            cols = num_col;
+
+            reset_items();
+        }
+
+        Matrix(std::vector<std::vector<float>> mat_items) {
+            items = mat_items;
+
+            rows = mat_items.size();
+            cols = (rows == 0 ? 0 : mat_items[0].size());
+        }
+
+        Matrix operator*(Matrix other_mat) {
+            //perform matrix multiplication
+            if (cols != other_mat.rows) {throw std::runtime_error("Matrix dimensions do not match for multiplication.");}
+
+            int new_rows = rows;
+            int new_cols = other_mat.cols;
+
+            Matrix new_mat(new_rows, new_cols);
+
+            for (int row_inx = 0; row_inx < new_rows; row_inx++) {
+                for (int col_inx = 0; col_inx < new_cols; col_inx++) {
+                    float sum = 0;
+
+                    for (int i = 0; i < cols; i++) {
+                        sum += items[row_inx][i] * other_mat.items[i][col_inx];
+                    }
+
+                    new_mat.items[row_inx][col_inx] = sum;
+                }
+            }
+
+            return new_mat;
+        }
+
+        Matrix transpose() {
+            //swap rows and cols
+            Matrix transposed(cols, rows);
+
+            for (int row_inx = 0; row_inx < rows; row_inx++) {
+                for (int col_inx = 0; col_inx < cols; col_inx++) {
+                    transposed.items[col_inx][row_inx] = items[row_inx][col_inx];
+                }
+            }
+
+            return transposed;
+        }
+
+        void reset_items() {
+            //populate the items with 0s
+            std::vector<std::vector<float>> blank_mat(rows, std::vector<float>(cols, 0));  //2d array filled with 0s
+            items = blank_mat;
+        }
+};
+
+
+class EnlargementMatrix : public Matrix {
+    public:
+        float scale;
+
+        EnlargementMatrix(float scale_fact, int dimensions) {
+            rows = dimensions;
+            cols = dimensions;
+
+            scale = scale_fact;
+
+            set_items();
+        }
+
+    private:
+        void set_items() {
+            reset_items();
+
+            //set the leading diagonal to be the scale factor
+            for (int i = 0; i < rows; i++) {
+                items[i][i] = scale;
+            }
+        }
+};
+
+
 class Object {
     public:
         std::vector<std::vector<float3>> faces;
@@ -52,7 +145,16 @@ class Object {
             off_y = offset_y;
             off_z = offset_z;
 
-            extract_faces();
+            extract_faces(get_vertex_mat());
+        }
+
+        void enlarge(float scale_fact) {
+            EnlargementMatrix transform_mat(scale_fact, 3);
+            Matrix vertex_mat = get_vertex_mat();
+
+            Matrix transformed_vertices = transform_mat * vertex_mat;
+            
+            extract_faces(transformed_vertices);  //rebuild the faces with the transformed vertices
         }
 
     private:
@@ -62,31 +164,33 @@ class Object {
 
         std::vector<std::string> file_contents;
 
-        std::vector<float3> extract_vertices() {
-            //get the coordinates of each vertex from the .obj file
-            std::vector<float3> vertices;
+        Matrix get_vertex_mat() {
+            //get the coordinates of each vertex from the .obj file and put them in a matrix
+            std::vector<std::vector<float>> vertices;
 
             for (std::string line : file_contents) {
                 std::vector<std::string> split_line = split_string(line, ' ');
 
                 if (split_line[0] == "v") {
                     //this is a vertex, so get its coordinates
-                    float3 vertex;
+                    std::vector<float> vertex;
                     
-                    vertex.x = std::stof(split_line[1]) + off_x;
-                    vertex.y = std::stof(split_line[2]) + off_y;
-                    vertex.z = std::stof(split_line[3]) + off_z;
+                    vertex.push_back(std::stof(split_line[1]));
+                    vertex.push_back(std::stof(split_line[2]));
+                    vertex.push_back(std::stof(split_line[3]));
 
                     vertices.push_back(vertex);
                 }
             }
 
-            return vertices;
+            Matrix vertex_matrix = Matrix(vertices).transpose();
+
+            return vertex_matrix;
         }
 
-        void extract_faces() {
+        void extract_faces(Matrix vertex_matrix) {
             //populate the faces vector with the vertices from each face
-            std::vector<float3> vertices = extract_vertices();
+            faces.clear();
 
             for (std::string line : file_contents) {
                 std::vector<std::string> split_line = split_string(line, ' ');
@@ -100,7 +204,12 @@ class Object {
                         std::vector<std::string> split_inxs = split_string(split_line[i], '/');
                         int vertex_inx = std::stoi(split_inxs[0]) - 1;  //must -1 because .obj is 1-indexed (for some odd reason)
 
-                        face.push_back(vertices[vertex_inx]);
+                        float3 vertex;
+                        vertex.x = vertex_matrix.items[0][vertex_inx] + off_x;
+                        vertex.y = vertex_matrix.items[1][vertex_inx] + off_y;
+                        vertex.z = vertex_matrix.items[2][vertex_inx] + off_z;
+
+                        face.push_back(vertex);
                     }
 
                     faces.push_back(face);  //add the face to the total list of faces
