@@ -13,7 +13,7 @@ class Vec3 {
             z = val_z;
         }
 
-        __device__ Vec3(float3 vector) {
+        __host__ __device__ Vec3(float3 vector) {
             x = vector.x;
             y = vector.y;
             z = vector.z;
