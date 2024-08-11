@@ -1,3 +1,4 @@
+#include <cmath>
 #include <vector>
 #include <fstream>
 
@@ -134,6 +135,60 @@ class EnlargementMatrix : public Matrix {
 };
 
 
+class RotationMatrix : public Matrix {
+    public:
+        static const int X_AXIS = 0;
+        static const int Y_AXIS = 1;
+        static const int Z_AXIS = 2;
+
+        int axis;
+        float angle;
+
+        RotationMatrix(int rot_axis, float rot_angle) {
+            axis = rot_axis;
+            angle = rot_angle;
+
+            rows = 3;
+            cols = 3;
+
+            set_items();
+        }
+
+    private:
+        void x_rot(float s, float c) {
+            items.push_back(std::vector<float>{1, 0, 0});
+            items.push_back(std::vector<float>{0, c, -s});
+            items.push_back(std::vector<float>{0, s, c});
+        }
+
+        void y_rot(float s, float c) {
+            items.push_back(std::vector<float>{c, 0, s});
+            items.push_back(std::vector<float>{0, 1, 0});
+            items.push_back(std::vector<float>{-s, 0, c});
+        }
+
+        void z_rot(float s, float c) {
+            items.push_back(std::vector<float>{c, -s, 0});
+            items.push_back(std::vector<float>{s, c, 0});
+            items.push_back(std::vector<float>{0, 0, 1});
+        }
+
+        void set_items() {
+            //https://en.wikipedia.org/wiki/Rotation_matrix
+            float s = sin(angle);
+            float c = cos(angle);
+
+            if (axis == X_AXIS) {
+                x_rot(s, c);
+            } else if (axis == Y_AXIS) {
+                y_rot(s, c);
+            } else {
+                z_rot(s, c);
+            }
+        }
+};
+
+
 class Object {
     public:
         std::vector<std::vector<float3>> faces;
@@ -153,6 +208,19 @@ class Object {
             Matrix vertex_mat = get_vertex_mat();
 
             Matrix transformed_vertices = transform_mat * vertex_mat;
+            
+            extract_faces(transformed_vertices);  //rebuild the faces with the transformed vertices
+        }
+
+        void rotate(float x_angle, float y_angle, float z_angle) {
+            //NOTE: angles are measured in radians
+            RotationMatrix x_rot(RotationMatrix::X_AXIS, x_angle);
+            RotationMatrix y_rot(RotationMatrix::Y_AXIS, y_angle);
+            RotationMatrix z_rot(RotationMatrix::Z_AXIS, z_angle);
+
+            Matrix vertex_mat = get_vertex_mat();
+
+            Matrix transformed_vertices = x_rot * y_rot * z_rot * vertex_mat;  //NOTE: as long as the rotations are before the vertex_mat, the order does not matter
             
             extract_faces(transformed_vertices);  //rebuild the faces with the transformed vertices
         }
