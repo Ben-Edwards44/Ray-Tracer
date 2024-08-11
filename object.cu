@@ -191,6 +191,7 @@ class RotationMatrix : public Matrix {
 
 class Object {
     public:
+        Matrix vertex_mat;
         std::vector<std::vector<float3>> faces;
 
         Object(std::string obj_filename, float offset_x, float offset_y, float offset_z) {
@@ -200,16 +201,16 @@ class Object {
             off_y = offset_y;
             off_z = offset_z;
 
-            extract_faces(get_vertex_mat());
+            vertex_mat = get_vertex_mat();
+
+            extract_faces();
         }
 
         void enlarge(float scale_fact) {
             EnlargementMatrix transform_mat(scale_fact, 3);
-            Matrix vertex_mat = get_vertex_mat();
-
-            Matrix transformed_vertices = transform_mat * vertex_mat;
+            vertex_mat = transform_mat * vertex_mat;  //NOTE: order matters in multiplication
             
-            extract_faces(transformed_vertices);  //rebuild the faces with the transformed vertices
+            extract_faces();  //rebuild the faces with the transformed vertices
         }
 
         void rotate(float x_angle, float y_angle, float z_angle) {
@@ -218,11 +219,9 @@ class Object {
             RotationMatrix y_rot(RotationMatrix::Y_AXIS, y_angle);
             RotationMatrix z_rot(RotationMatrix::Z_AXIS, z_angle);
 
-            Matrix vertex_mat = get_vertex_mat();
-
-            Matrix transformed_vertices = x_rot * y_rot * z_rot * vertex_mat;  //NOTE: as long as the rotations are before the vertex_mat, the order does not matter
+            vertex_mat = x_rot * y_rot * z_rot * vertex_mat;  //NOTE: as long as the rotations are before the vertex_mat, the order does not matter
             
-            extract_faces(transformed_vertices);  //rebuild the faces with the transformed vertices
+            extract_faces();  //rebuild the faces with the transformed vertices
         }
 
     private:
@@ -256,7 +255,7 @@ class Object {
             return vertex_matrix;
         }
 
-        void extract_faces(Matrix vertex_matrix) {
+        void extract_faces() {
             //populate the faces vector with the vertices from each face
             faces.clear();
 
@@ -273,9 +272,9 @@ class Object {
                         int vertex_inx = std::stoi(split_inxs[0]) - 1;  //must -1 because .obj is 1-indexed (for some odd reason)
 
                         float3 vertex;
-                        vertex.x = vertex_matrix.items[0][vertex_inx] + off_x;
-                        vertex.y = vertex_matrix.items[1][vertex_inx] + off_y;
-                        vertex.z = vertex_matrix.items[2][vertex_inx] + off_z;
+                        vertex.x = vertex_mat.items[0][vertex_inx] + off_x;
+                        vertex.y = vertex_mat.items[1][vertex_inx] + off_y;
+                        vertex.z = vertex_mat.items[2][vertex_inx] + off_z;
 
                         face.push_back(vertex);
                     }
