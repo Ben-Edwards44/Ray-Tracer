@@ -21,7 +21,7 @@ class Vec3 {
 
         __device__ Vec3() {}
 
-        //common operations. TODO: overwrite +=, *= etc.
+        //common operations
         __device__ Vec3 operator+(Vec3 other_vec) {
             return Vec3(x + other_vec.x, y + other_vec.y, z + other_vec.z);
         }
@@ -32,6 +32,14 @@ class Vec3 {
 
         __device__ Vec3 operator+(Vec3 *other_vec) {
             return Vec3(x + other_vec->x, y + other_vec->y, z + other_vec->z);
+        }
+
+        __device__ Vec3* operator+=(Vec3 other_vec) {
+            x += other_vec.x;
+            y += other_vec.y;
+            z += other_vec.z;
+
+            return this;
         }
 
         __host__ __device__ Vec3 operator-(Vec3 other_vec) {
@@ -60,8 +68,34 @@ class Vec3 {
             return Vec3(x * other_vec->x, y * other_vec->y, z * other_vec->z);
         }
 
+        __device__ Vec3* operator*=(Vec3 other_vec) {
+            //element-wise multiplication
+            x *= other_vec.x;
+            y *= other_vec.y;
+            z *= other_vec.z;
+
+            return this;
+        }
+
+        __device__ Vec3* operator*=(float scalar) {
+            //element-wise multiplication
+            x *= scalar;
+            y *= scalar;
+            z *= scalar;
+
+            return this;
+        }
+
         __device__ Vec3 operator/(float scalar) {
             return Vec3(x / scalar, y / scalar, z / scalar);
+        }
+
+        __device__ Vec3* operator/=(float scalar) {
+            x /= scalar;
+            y /= scalar;
+            z /= scalar;
+
+            return this;
         }
 
         __host__ __device__ float magnitude() {

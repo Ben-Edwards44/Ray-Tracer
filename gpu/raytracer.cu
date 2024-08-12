@@ -142,7 +142,7 @@ __device__ class Ray {
             Vec3 rand_vec(dir_x, dir_y, dir_z);
 
             if (rand_vec.dot(hit_data->normal_vec) < 0) {
-                rand_vec = rand_vec * -1;  //invert since we want a vector that points outwards
+                rand_vec *= -1;  //invert since we want a vector that points outwards
             }
 
             return rand_vec.normalised();
@@ -289,7 +289,7 @@ __host__ __device__ class Triangle {
                     hit_data.hit_point = ray->get_pos(hit_data.ray_travelled_dist);
 
                     Vec3 normal = normal_vec;
-                    if (normal.dot(ray->direction) > 0) {normal = normal * -1;}  //normal should point in same direction as the ray
+                    if (normal.dot(ray->direction) > 0) {normal *= -1;}  //normal should point in same direction as the ray
 
                     hit_data.normal_vec = normal;
                 }
@@ -397,7 +397,7 @@ __device__ Vec3 trace_ray(Ray ray, AllMeshes *meshes, RenderData *render_data) {
 
         if (!collision.hit_data.ray_hits) {
             //ray has not hit anything - it has hit sky
-            final_colour = final_colour + render_data->sky_colour * current_ray_colour;
+            final_colour += render_data->sky_colour * current_ray_colour;
             break;
         }
 
@@ -406,8 +406,8 @@ __device__ Vec3 trace_ray(Ray ray, AllMeshes *meshes, RenderData *render_data) {
         Material material = collision.hit_mesh_material;
         Vec3 mat_emitted_light = material.emission_colour * material.emission_strength;  //TODO: precalculate
 
-        final_colour = final_colour + mat_emitted_light * current_ray_colour;
-        current_ray_colour = current_ray_colour * material.colour;
+        final_colour += mat_emitted_light * current_ray_colour;
+        current_ray_colour *= material.colour;
     }
 
     return final_colour;
@@ -419,10 +419,10 @@ __device__ Vec3 get_ray_colour(Vec3 previous_colour, Ray ray, AllMeshes *meshes,
 
     for (int _ = 0; _ < render_data->rays_per_pixel; _++) {
         Vec3 ray_colour = trace_ray(ray, meshes, render_data);  //passing by value copies the ray, so we can comfortably make changes to it
-        colour = colour + ray_colour;
+        colour += ray_colour;
     }
 
-    colour = colour / render_data->rays_per_pixel;
+    colour /= render_data->rays_per_pixel;
 
     if (render_data->static_scene && render_data->frame_num > 0) {
         //use progressive rendering (take average of previous renders)
