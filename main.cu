@@ -73,6 +73,9 @@ class Meshes {
         void add_obj_file(std::string filename, Material mat, Vec3 offset) {
             Object obj(filename, offset.x, offset.y, offset.z);
 
+            obj.rotate(0, 2.5, 0);
+            obj.enlarge(0.5);
+
             //parse the object faces into triangles
             for (std::vector<float3> face : obj.faces) {
                 if (face.size() != 3) {throw std::logic_error("Only triangle meshes are supported.");}
@@ -90,18 +93,18 @@ class Meshes {
             Material met_mat{Vec3(0.8, 0.8, 0.8), 0, Vec3(0, 0, 0), METAL, 0.3};
             Material light_mat{Vec3(0, 0, 0), 2, Vec3(1, 1, 1), DIFFUSE};
 
-            add_obj_file("torus.obj", dif_mat, Vec3(0, 0, 3));
+            add_obj_file("monkey.obj", met_mat, Vec3(0, 0, 3));
 
             //Sphere s1(Vec3(-1, 0, 2.2), 0.5, ref_mat);
             //Sphere s2(Vec3(1, 0, 2), 0.5, met_mat);
-            //Sphere s3(Vec3(0, 0, 2.1), 0.5, dif_mat2);
-            //Sphere s4(Vec3(0, -5, 4), 5, dif_mat);
+            Sphere s3(Vec3(1.4, -0.3, 3), 0.5, dif_mat2);
+            Sphere s4(Vec3(0, -5.5, 4), 5, dif_mat);
             Sphere s5(Vec3(0, 1.6, 2), 1, light_mat);
 
             //spheres.push_back(s1);
             //spheres.push_back(s2);
-            //spheres.push_back(s3);
-            //spheres.push_back(s4);
+            spheres.push_back(s3);
+            spheres.push_back(s4);
             spheres.push_back(s5);
 
             //Triangle t1(Vec3(-0.5, -0.3, 1.5), Vec3(0.6, 1, 3.5), Vec3(0.5, -0.5, 2), met_mat);
@@ -138,9 +141,9 @@ class RenderSettings {
             static_scene = true;
             antialias = true;
 
-            sky_colour.x = 0;//0.87;
-            sky_colour.y = 0;//0.98;
-            sky_colour.z = 0;//1;
+            sky_colour.x = 0.87;
+            sky_colour.y = 0.98;
+            sky_colour.z = 1;
         }
 
         RenderData create_gpu_struct(int num_spheres) {
