@@ -194,13 +194,8 @@ class Object {
         Matrix vertex_mat;
         std::vector<std::vector<float3>> faces;
 
-        Object(std::string obj_filename, float offset_x, float offset_y, float offset_z) {
+        Object(std::string obj_filename) {
             file_contents = read_file(obj_filename);
-
-            off_x = offset_x;
-            off_y = offset_y;
-            off_z = offset_z;
-
             vertex_mat = get_vertex_mat();
 
             extract_faces();
@@ -224,11 +219,17 @@ class Object {
             extract_faces();  //rebuild the faces with the transformed vertices
         }
 
-    private:
-        float off_x;
-        float off_y;
-        float off_z;
+        void translate(float offset_x, float offset_y, float offset_z) {
+            for (int i = 0; i < vertex_mat.cols; i++) {
+                vertex_mat.items[0][i] += offset_x;
+                vertex_mat.items[1][i] += offset_y;
+                vertex_mat.items[2][i] += offset_z;
+            }
 
+            extract_faces();  //rebuild the faces with the transformed vertices
+        }
+
+    private:
         std::vector<std::string> file_contents;
 
         Matrix get_vertex_mat() {
@@ -272,9 +273,9 @@ class Object {
                         int vertex_inx = std::stoi(split_inxs[0]) - 1;  //must -1 because .obj is 1-indexed (for some odd reason)
 
                         float3 vertex;
-                        vertex.x = vertex_mat.items[0][vertex_inx] + off_x;
-                        vertex.y = vertex_mat.items[1][vertex_inx] + off_y;
-                        vertex.z = vertex_mat.items[2][vertex_inx] + off_z;
+                        vertex.x = vertex_mat.items[0][vertex_inx];
+                        vertex.y = vertex_mat.items[1][vertex_inx];
+                        vertex.z = vertex_mat.items[2][vertex_inx];
 
                         face.push_back(vertex);
                     }

@@ -70,11 +70,12 @@ class Meshes {
         const int MIRROR = 1;
         const int METAL = 2;
 
-        void add_obj_file(std::string filename, Material mat, Vec3 offset) {
-            Object obj(filename, offset.x, offset.y, offset.z);
+        void add_obj_file(std::string filename, Material mat) {
+            Object obj(filename);
 
             obj.rotate(0, 2.5, 0);
             obj.enlarge(0.5);
+            obj.translate(0, 0, 3);
 
             //parse the object faces into triangles
             for (std::vector<float3> face : obj.faces) {
@@ -93,7 +94,7 @@ class Meshes {
             Material met_mat{Vec3(0.8, 0.8, 0.8), 0, Vec3(0, 0, 0), METAL, 0.3};
             Material light_mat{Vec3(0, 0, 0), 2, Vec3(1, 1, 1), DIFFUSE};
 
-            add_obj_file("monkey.obj", met_mat, Vec3(0, 0, 3));
+            add_obj_file("monkey.obj", met_mat);
 
             //Sphere s1(Vec3(-1, 0, 2.2), 0.5, ref_mat);
             //Sphere s2(Vec3(1, 0, 2), 0.5, met_mat);
@@ -136,7 +137,7 @@ class RenderSettings {
         void assign_default() {
             //these settings can be changed
             reflect_limit = 5;
-            rays_per_pixel = 100;
+            rays_per_pixel = 10;
 
             static_scene = true;
             antialias = true;
