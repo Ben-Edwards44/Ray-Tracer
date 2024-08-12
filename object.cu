@@ -194,9 +194,9 @@ class Object {
         Matrix vertex_mat;
         std::vector<std::vector<float3>> faces;
 
-        Object(std::string obj_filename) {
-            file_contents = read_file(obj_filename);
-            vertex_mat = get_vertex_mat();
+        Object(std::string filename) {
+            file_contents = read_file(filename);
+            vertex_mat = get_vertex_mat(read_vertices());
 
             extract_faces();
         }
@@ -231,9 +231,9 @@ class Object {
 
     private:
         std::vector<std::string> file_contents;
-
-        Matrix get_vertex_mat() {
-            //get the coordinates of each vertex from the .obj file and put them in a matrix
+        
+        std::vector<std::vector<float>> read_vertices() {
+            //read the coordinates of each vertex from the .obj file
             std::vector<std::vector<float>> vertices;
 
             for (std::string line : file_contents) {
@@ -251,9 +251,14 @@ class Object {
                 }
             }
 
-            Matrix vertex_matrix = Matrix(vertices).transpose();
+            return vertices;
+        }
 
-            return vertex_matrix;
+        Matrix get_vertex_mat(std::vector<std::vector<float>> vertices) {
+            //convert a 2d vector of vertices to a matrix
+            Matrix transposed_vertex_matrix(vertices);
+
+            return transposed_vertex_matrix.transpose();
         }
 
         void extract_faces() {
