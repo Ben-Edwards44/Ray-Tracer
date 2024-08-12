@@ -157,14 +157,14 @@ class RotationMatrix : public Matrix {
     private:
         void x_rot(float s, float c) {
             items.push_back(std::vector<float>{1, 0, 0});
-            items.push_back(std::vector<float>{0, c, -s});
-            items.push_back(std::vector<float>{0, s, c});
+            items.push_back(std::vector<float>{0, c, s});
+            items.push_back(std::vector<float>{0, -s, c});
         }
 
         void y_rot(float s, float c) {
-            items.push_back(std::vector<float>{c, 0, s});
+            items.push_back(std::vector<float>{c, 0, -s});
             items.push_back(std::vector<float>{0, 1, 0});
-            items.push_back(std::vector<float>{-s, 0, c});
+            items.push_back(std::vector<float>{s, 0, c});
         }
 
         void z_rot(float s, float c) {
