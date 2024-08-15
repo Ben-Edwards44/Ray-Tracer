@@ -3,19 +3,6 @@
 #include <random>
 
 
-struct Scene {
-    CamData cam_data;
-    RenderData render_data;
-
-    std::vector<Sphere> spheres;
-    std::vector<Triangle> triangles;
-
-    int len_pixel_array;
-
-    std::vector<float> previous_render;
-};
-
-
 void check_error(cudaError_t error) {
     if (error != cudaSuccess) {
         std::string err_msg = cudaGetErrorString(error);
@@ -117,6 +104,21 @@ class ReadOnlyDeviceValue {
 };
 
 
+struct Scene {
+    CamData cam_data;
+    RenderData render_data;
+
+    std::vector<Sphere> spheres;
+    std::vector<Triangle> triangles;
+    std::vector<Quad> quads;
+    std::vector<OneWayQuad> one_way_quads;
+
+    int len_pixel_array;
+
+    std::vector<float> previous_render;
+};
+
+
 dim3 get_block_size(int array_width, int array_height, dim3 thread_dim) {
     //we need to round up in cases where the array size is not divided exactly
     int blocks_x = array_width / thread_dim.x + 1;
@@ -127,13 +129,18 @@ dim3 get_block_size(int array_width, int array_height, dim3 thread_dim) {
 
 
 AllMeshes get_meshes(Scene *scene) {
+    //NOTE: I'm not sure I ever free the memory used here... (I'll just leave it for now)
     ReadOnlyDeviceArray<Sphere> spheres(scene->spheres);
     ReadOnlyDeviceArray<Triangle> triangles(scene->triangles);
+    ReadOnlyDeviceArray<Quad> quads(scene->quads);
+    ReadOnlyDeviceArray<OneWayQuad> one_way_quads(scene->one_way_quads);
 
     int num_spheres = scene->spheres.size();
     int num_triangles = scene->triangles.size();
+    int num_quads = scene->quads.size();
+    int num_one_way_quads = scene->one_way_quads.size();
 
-    AllMeshes meshes{spheres.device_pointer, triangles.device_pointer, num_spheres, num_triangles};
+    AllMeshes meshes{spheres.device_pointer, triangles.device_pointer, quads.device_pointer, one_way_quads.device_pointer, num_spheres, num_triangles, num_quads, num_one_way_quads};
 
     return meshes;
 }

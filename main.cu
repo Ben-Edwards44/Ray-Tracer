@@ -8,8 +8,8 @@
 #include <SFML/Graphics.hpp>
 
 
-const int WIDTH = 800;
-const int HEIGHT = 500;
+const int WIDTH = 1000;
+const int HEIGHT = 800;
 const float ASPECT = static_cast<float>(WIDTH) / static_cast<float>(HEIGHT);  //static cast is used to stop integer division
 
 const std::string CAPTION = "ray tracer";
@@ -60,9 +60,11 @@ class Meshes {
     public:
         std::vector<Sphere> spheres;
         std::vector<Triangle> triangles;
+        std::vector<Quad> quads;
+        std::vector<OneWayQuad> one_way_quads;
 
         Meshes() {
-            create_gpu_struct();
+            create_meshes();
         }
 
     private:
@@ -70,14 +72,8 @@ class Meshes {
         const int MIRROR = 1;
         const int METAL = 2;
 
-        void add_obj_file(std::string filename, Material mat) {
-            Object obj(filename);
-
-            obj.rotate(0, 2.5, 0);
-            obj.enlarge(0.5);
-            obj.translate(0, 0, 3);
-
-            //parse the object faces into triangles
+        void add_obj_triangles(Object obj, Material mat) {
+            //parse the object faces into triangles and add them to the list of triangles
             for (std::vector<float3> face : obj.faces) {
                 if (face.size() != 3) {throw std::logic_error("Only triangle meshes are supported.");}
 
@@ -86,31 +82,43 @@ class Meshes {
             }
         }
 
-        void create_gpu_struct() {
+        void create_cornell_box(Vec3 tl_near_pos, float width, float height, float depth) {
+            Material floor{Vec3(0.1, 0.8, 0.1), 0, Vec3(0, 0, 0), DIFFUSE};
+            Material l_wall{Vec3(1, 0.2, 0.2), 0, Vec3(0, 0, 0), DIFFUSE};
+            Material r_wall{Vec3(0.3, 0.3, 1), 0, Vec3(0, 0, 0), DIFFUSE};
+            Material back{Vec3(0.2, 0.2, 0.2), 0, Vec3(0, 0, 0), DIFFUSE};
+            Material roof{Vec3(0.9, 0.9, 0.9), 0, Vec3(0, 0, 0), DIFFUSE};
+            Material front{Vec3(1, 1, 1), 0, Vec3(0, 0, 0), DIFFUSE};
+
+            //offset vectors
+            Vec3 w(width, 0, 0);
+            Vec3 h(0, height, 0);
+            Vec3 d(0, 0, depth);
+
+            quads.push_back(Quad(tl_near_pos - h, tl_near_pos - h + w, tl_near_pos - h + w + d, tl_near_pos - h + d, floor));
+            quads.push_back(Quad(tl_near_pos, tl_near_pos - h, tl_near_pos - h + d, tl_near_pos + d, l_wall));
+            quads.push_back(Quad(tl_near_pos + w, tl_near_pos + w - h, tl_near_pos + w - h + d, tl_near_pos + w + d, r_wall));
+            quads.push_back(Quad(tl_near_pos + d, tl_near_pos + w + d, tl_near_pos + w - h + d, tl_near_pos - h + d, back));
+            quads.push_back(Quad(tl_near_pos, tl_near_pos + d, tl_near_pos + w + d, tl_near_pos + w, roof));
+            one_way_quads.push_back(OneWayQuad(tl_near_pos, tl_near_pos + w, tl_near_pos + w - h, tl_near_pos - h, front, false));  //front wall is one way so we can see through it
+
+            //add the light
+            Material light{Vec3(0, 0, 0), 5, Vec3(1, 1, 1), DIFFUSE};
+            spheres.push_back(Sphere(tl_near_pos + w / 2 + d / 2 + Vec3(0, 1, 0) * 0.2, 0.4, light));
+        }
+
+        void create_meshes() {
             //these meshes can be changed
-            Material dif_mat{Vec3(1, 0.2, 0.1), 0, Vec3(0, 0, 0), DIFFUSE};
-            Material dif_mat2{Vec3(0.2, 0.1, 1), 0, Vec3(0, 0, 0), DIFFUSE};
-            Material ref_mat{Vec3(0.8, 0.8, 0.8), 0, Vec3(0, 0, 0), MIRROR};
-            Material met_mat{Vec3(0.8, 0.8, 0.8), 0, Vec3(0, 0, 0), METAL, 0.3};
-            Material light_mat{Vec3(0, 0, 0), 2, Vec3(1, 1, 1), DIFFUSE};
+            create_cornell_box(Vec3(-0.5, 0.5, 1.2), 1, 1, 1);
 
-            add_obj_file("monkey.obj", met_mat);
+            Material white_mat{Vec3(1, 1, 1), 0, Vec3(0, 0, 0), DIFFUSE};
 
-            //Sphere s1(Vec3(-1, 0, 2.2), 0.5, ref_mat);
-            //Sphere s2(Vec3(1, 0, 2), 0.5, met_mat);
-            Sphere s3(Vec3(1.4, -0.3, 3), 0.5, dif_mat2);
-            Sphere s4(Vec3(0, -5.5, 4), 5, dif_mat);
-            Sphere s5(Vec3(0, 1.6, 2), 1, light_mat);
+            Object m("monkey.obj");
+            m.enlarge(0.3);
+            m.rotate(0, 2.5, 0);
+            m.translate(0, 0, 1.8);
 
-            //spheres.push_back(s1);
-            //spheres.push_back(s2);
-            spheres.push_back(s3);
-            spheres.push_back(s4);
-            spheres.push_back(s5);
-
-            //Triangle t1(Vec3(-0.5, -0.3, 1.5), Vec3(0.6, 1, 3.5), Vec3(0.5, -0.5, 2), met_mat);
-
-            //triangles.push_back(t1);
+            add_obj_triangles(m, white_mat);
         }
 };
 
@@ -137,14 +145,14 @@ class RenderSettings {
         void assign_default() {
             //these settings can be changed
             reflect_limit = 5;
-            rays_per_pixel = 10;
+            rays_per_pixel = 100;
 
             static_scene = true;
             antialias = true;
 
-            sky_colour.x = 0.87;
-            sky_colour.y = 0.98;
-            sky_colour.z = 1;
+            sky_colour.x = 0;
+            sky_colour.y = 0;
+            sky_colour.z = 0;
         }
 
         RenderData create_gpu_struct(int num_spheres) {
@@ -164,7 +172,7 @@ Scene create_scene(int img_width, int img_height) {
 
     std::vector<float> previous_render(len_pixel_array);
 
-    return Scene{cam.gpu_struct, render_settings.gpu_struct, meshes.spheres, meshes.triangles, len_pixel_array, previous_render};
+    return Scene{cam.gpu_struct, render_settings.gpu_struct, meshes.spheres, meshes.triangles, meshes.quads, meshes.one_way_quads, len_pixel_array, previous_render};
 }
 
 

@@ -4,7 +4,7 @@
 const int INF = 1 << 31 - 1;
 const float FLOAT_PRECISION_ERROR = 0.000001;
 
-const float ANTIALIAS_OFFSET_RANGE = 0.001;
+const float ANTIALIAS_OFFSET_RANGE = 0.0015;
 
 
 __host__ __device__ struct CamData {
@@ -198,8 +198,6 @@ __host__ __device__ class Sphere {
             material = mat;
         };
 
-        __device__ Sphere() {};
-
         __device__ RayHitData hit(Ray *ray) {
             //ray-sphere intersection results in quadratic equation t^2(d⋅d)−2td⋅(C−Q)+(C−Q)⋅(C−Q)−r^2=0
             //so we solve with quadratic formula
@@ -244,9 +242,11 @@ __host__ __device__ class Sphere {
 __host__ __device__ class Triangle {
     public:
         Material material;
-        Vec3 points[3];
+        Vec3 normal_vec;
 
-        __host__ __device__ Triangle(Vec3 point1, Vec3 point2, Vec3 point3, Material mat) {
+        Triangle() {}
+
+        __host__ Triangle(Vec3 point1, Vec3 point2, Vec3 point3, Material mat) {
             points[0] = point1;
             points[1] = point2;
             points[2] = point3;
@@ -304,27 +304,93 @@ __host__ __device__ class Triangle {
             return hit_data;
         }
 
-    private:
-        Plane plane;
-        Vec3 normal_vec;
+        private:
+            Plane plane;
 
-        __host__ __device__ void precompute() {
-            //precompute the plane the triangle lies on and (one of) its normal vectors. https://math.stackexchange.com/questions/2686606/equation-of-a-plane-passing-through-3-points
-            Vec3 side1 = points[0] - points[1];
-            Vec3 side2 = points[1] - points[2];
+            Vec3 points[3];
 
-            normal_vec = side1.cross(side2).normalised();
+            __host__ void precompute() {
+                //precompute the plane the mesh lies on and (one of) its normal vectors. https://math.stackexchange.com/questions/2686606/equation-of-a-plane-passing-through-3-points
+                Vec3 side1 = points[0] - points[1];
+                Vec3 side2 = points[1] - points[2];
 
-            plane = {normal_vec.x, normal_vec.y, normal_vec.z};
-            plane.d = -(plane.a * points[0].x + plane.b * points[0].y + plane.c * points[0].z);  //sub in a point to find constant
+                normal_vec = side1.cross(side2).normalised();
+
+                plane = {normal_vec.x, normal_vec.y, normal_vec.z};
+                plane.d = -(plane.a * points[0].x + plane.b * points[0].y + plane.c * points[0].z);  //sub in a point to find constant
+            }
+
+            __device__ float get_ray_travelled_dist(Ray *ray) {
+                //this algebra was worked out on paper (it is just the interesction between a line and plane really)
+                float numerator = plane.d + plane.a * ray->origin.x + plane.b * ray->origin.y + plane.c * ray->origin.z;
+                float denominator = plane.a * ray->direction.x + plane.b * ray->direction.y + plane.c * ray->direction.z;
+
+                return -numerator / denominator;
+            }
+};
+
+
+__host__ __device__ class Quad {
+    public:
+        Material material;
+
+        Quad() {}
+
+        __host__ Quad(Vec3 point1, Vec3 point2, Vec3 point3, Vec3 point4, Material mat) {
+            material = mat;
+
+            create_triangles(point1, point2, point3, point4);
         }
 
-        __device__ float get_ray_travelled_dist(Ray *ray) {
-            //this algebra was worked out on paper (it is just the interesction between a line and plane really)
-            float numerator = plane.d + plane.a * ray->origin.x + plane.b * ray->origin.y + plane.c * ray->origin.z;
-            float denominator = plane.a * ray->direction.x + plane.b * ray->direction.y + plane.c * ray->direction.z;
+        __device__ RayHitData hit(Ray *ray) {
+            RayHitData t1_hit = t1.hit(ray);
+            RayHitData t2_hit = t2.hit(ray);
 
-            return -numerator / denominator;
+            //return whichever triangle hits (or just the 2nd one if none of them hit)
+            if (t1_hit.ray_hits) {
+                return t1_hit;
+            } else {
+                return t2_hit;
+            }
+        }
+
+    protected:  //NOTE: protected is used instead of private so these can be inherited by OneWayQuad
+        Triangle t1;
+        Triangle t2;
+
+        void create_triangles(Vec3 point1, Vec3 point2, Vec3 point3, Vec3 point4) {
+            //a quad is just 2 triangles
+            t1 = Triangle(point1, point2, point3, material);
+            t2 = Triangle(point1, point4, point3, material);
+        }
+};
+
+
+__host__ __device__ class OneWayQuad : public Quad {
+    public:
+        __host__ OneWayQuad(Vec3 point1, Vec3 point2, Vec3 point3, Vec3 point4, Material mat, bool invert_normal) {
+            material = mat;
+
+            create_triangles(point1, point2, point3, point4);
+            get_normal_vec(invert_normal);
+        }
+
+        __device__ RayHitData hit(Ray *ray) {
+            if (ray->direction.dot(normal_vec) < 0) {
+                //as this is one way, rays travelling in opposite direction to the normal vector should not be counted as hits
+                return RayHitData{false, INF};
+            } else {
+                return Quad::hit(ray);
+            }
+        }
+
+    private:
+        Vec3 normal_vec;
+
+        __host__ void get_normal_vec(bool invert_normal) {
+            //branchless (because its cooler) method of multiplying the normal by -1 <=> invert_normal is true
+            int multiplier = 1 - 2 * invert_normal;
+            normal_vec = t1.normal_vec * multiplier;
         }
 };
 
@@ -332,9 +398,13 @@ __host__ __device__ class Triangle {
 __device__ struct AllMeshes {
     Sphere *spheres;
     Triangle *triangles;
+    Quad *quads;
+    OneWayQuad *one_way_quads;
 
     int num_spheres;
     int num_triangles;
+    int num_quads;
+    int num_one_way_quads;
 };
 
 
@@ -373,16 +443,27 @@ __device__ RayCollision get_specific_mesh_collision(Ray *ray, T *meshes, int num
 
 
 __device__ RayCollision get_ray_collision(Ray *ray, AllMeshes *meshes) {
-    RayCollision triangle_collision = get_specific_mesh_collision<Triangle>(ray, meshes->triangles, meshes->num_triangles);
     RayCollision sphere_collision = get_specific_mesh_collision<Sphere>(ray, meshes->spheres, meshes->num_spheres);
+    RayCollision triangle_collision = get_specific_mesh_collision<Triangle>(ray, meshes->triangles, meshes->num_triangles);
+    RayCollision quad_collision = get_specific_mesh_collision<Quad>(ray, meshes->quads, meshes->num_quads);
+    RayCollision one_way_quad_collision = get_specific_mesh_collision<OneWayQuad>(ray, meshes->one_way_quads, meshes->num_one_way_quads);
 
-    bool tri_closer = triangle_collision.hit_data.ray_travelled_dist < sphere_collision.hit_data.ray_travelled_dist;
+    RayCollision closest_collision = sphere_collision;
 
-    if (tri_closer && triangle_collision.hit_data.ray_hits) {
-        return triangle_collision;
-    } else {
-        return sphere_collision;
+    if (triangle_collision.hit_data.ray_hits && triangle_collision.hit_data.ray_travelled_dist < closest_collision.hit_data.ray_travelled_dist) {
+        //triangle is actually better collision
+        closest_collision = triangle_collision;
     }
+    if (quad_collision.hit_data.ray_hits && quad_collision.hit_data.ray_travelled_dist < closest_collision.hit_data.ray_travelled_dist) {
+        //quad is actually better collision
+        closest_collision = quad_collision;
+    }
+    if (one_way_quad_collision.hit_data.ray_hits && one_way_quad_collision.hit_data.ray_travelled_dist < closest_collision.hit_data.ray_travelled_dist) {
+        //one way quad is actually better collision
+        closest_collision = one_way_quad_collision;
+    }
+
+    return closest_collision;
 }
 
 
