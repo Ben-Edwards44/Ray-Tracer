@@ -147,7 +147,6 @@ class RenderSettings {
             reflect_limit = 5;
             rays_per_pixel = 100;
 
-            static_scene = true;
             antialias = true;
 
             sky_colour.x = 0;
@@ -158,7 +157,7 @@ class RenderSettings {
         RenderData create_gpu_struct(int num_spheres) {
             int start_frame_num = 0;
 
-            return RenderData{rays_per_pixel, reflect_limit, start_frame_num, static_scene, antialias, sky_colour};
+            return RenderData{rays_per_pixel, reflect_limit, start_frame_num, antialias, sky_colour};
         }
 };
 

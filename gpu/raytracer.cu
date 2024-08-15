@@ -29,7 +29,6 @@ __host__ __device__ struct RenderData {
 
     int frame_num;
 
-    bool static_scene;
     bool antialias;
 
     Vec3 sky_colour;
@@ -505,13 +504,10 @@ __device__ Vec3 get_ray_colour(Vec3 previous_colour, Ray ray, AllMeshes *meshes,
 
     colour /= render_data->rays_per_pixel;
 
-    if (render_data->static_scene && render_data->frame_num > 0) {
-        //use progressive rendering (take average of previous renders)
-        Vec3 previous_sum = previous_colour * render_data->frame_num;
-        return (colour + previous_sum) / (render_data->frame_num + 1);
-    } else {
-        return colour;
-    }
+    //use progressive rendering (take average of previous renders)
+    Vec3 previous_sum = previous_colour * render_data->frame_num;
+    
+    return (colour + previous_sum) / (render_data->frame_num + 1);
 }
 
 
