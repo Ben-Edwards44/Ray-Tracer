@@ -1,6 +1,8 @@
-#include "raytracer.cu"
 #include <vector>
 #include <random>
+#include <stdexcept>
+
+#include "raytracer.cu"
 
 
 void check_error(cudaError_t error) {
