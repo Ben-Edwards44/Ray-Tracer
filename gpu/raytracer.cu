@@ -6,12 +6,13 @@ __host__ __device__ struct RenderData {
     int rays_per_pixel;
     int reflection_limit;
 
-    int frame_num;
-
     bool antialias;
 
     Vec3 sky_colour;
 };
+
+
+__constant__ RenderData const_render_data;
 
 
 __device__ struct RayCollision {
@@ -73,18 +74,18 @@ __device__ RayCollision get_ray_collision(Ray *ray) {
 }
 
 
-__device__ Vec3 trace_ray(Ray ray, RenderData *render_data) {
+__device__ Vec3 trace_ray(Ray ray) {
     Vec3 final_colour(0, 0, 0);
     Vec3 current_ray_colour(1, 1, 1);
 
-    for (int _ = 0; _ < render_data->reflection_limit; _++) {
+    for (int _ = 0; _ < const_render_data.reflection_limit; _++) {
         ray.apply_antialias();
 
         RayCollision collision = get_ray_collision(&ray);
 
         if (!collision.hit_data.ray_hits) {
             //ray has not hit anything - it has hit sky
-            final_colour += render_data->sky_colour * current_ray_colour;
+            final_colour += const_render_data.sky_colour * current_ray_colour;
             break;
         }
 
@@ -101,24 +102,24 @@ __device__ Vec3 trace_ray(Ray ray, RenderData *render_data) {
 }
 
 
-__device__ Vec3 get_ray_colour(Vec3 previous_colour, Ray ray, RenderData *render_data) {
+__device__ Vec3 get_ray_colour(Vec3 previous_colour, Ray ray, int frame_num) {
     Vec3 colour(0, 0, 0);
 
-    for (int _ = 0; _ < render_data->rays_per_pixel; _++) {
-        Vec3 ray_colour = trace_ray(ray, render_data);  //passing by value copies the ray, so we can comfortably make changes to it
+    for (int _ = 0; _ < const_render_data.rays_per_pixel; _++) {
+        Vec3 ray_colour = trace_ray(ray);  //passing by value copies the ray, so we can comfortably make changes to it
         colour += ray_colour;
     }
 
-    colour /= render_data->rays_per_pixel;
+    colour /= const_render_data.rays_per_pixel;
 
     //use progressive rendering (take average of previous renders)
-    Vec3 previous_sum = previous_colour * render_data->frame_num;
+    Vec3 previous_sum = previous_colour * frame_num;
     
-    return (colour + previous_sum) / (render_data->frame_num + 1);
+    return (colour + previous_sum) / (frame_num + 1);
 }
 
 
-__global__ void get_pixel_colour(float *pixel_array, float *previous_render, RenderData *render_data, int *current_time) {
+__global__ void get_pixel_colour(float *pixel_array, float *previous_render, int *current_time, int *frame_num) {
     //TODO: the number of params in this function is simply obscene: use a struct to clean things up
     int pixel_coord_x = threadIdx.x + blockIdx.x * blockDim.x;
     int pixel_coord_y = threadIdx.y + blockIdx.y * blockDim.y;
@@ -131,9 +132,9 @@ __global__ void get_pixel_colour(float *pixel_array, float *previous_render, Ren
 
     uint rng_state = array_index * 3145739 + *current_time * 6291469;
 
-    Ray ray(pixel_coord_x, pixel_coord_y, &rng_state, render_data->antialias);
+    Ray ray(pixel_coord_x, pixel_coord_y, &rng_state, const_render_data.antialias);
 
-    Vec3 colour = get_ray_colour(previous_colour, ray, render_data);
+    Vec3 colour = get_ray_colour(previous_colour, ray, *frame_num);
 
     pixel_array[array_index] = colour.x;
     pixel_array[array_index + 1] = colour.y;

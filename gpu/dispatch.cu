@@ -117,6 +117,7 @@ class Scene {
         std::vector<OneWayQuad> one_way_quads;
 
         int len_pixel_array;
+        int frame_num;
 
         std::vector<float> previous_render;
 
@@ -129,7 +130,9 @@ class Scene {
             triangles = t;
             quads = q;
             one_way_quads = o_q;
+
             len_pixel_array = len;
+            frame_num = 0;
 
             previous_render = std::vector<float>(len_pixel_array);
 
@@ -141,8 +144,9 @@ class Scene {
     private:
         void assign_constant_mem() {
             //to be called before first scene (NOTE: no need to free constant memory)
-            cudaMemcpyToSymbol(const_all_meshes, &all_mesh_struct, sizeof(all_mesh_struct));
             cudaMemcpyToSymbol(const_cam_data, &cam_data, sizeof(cam_data));
+            cudaMemcpyToSymbol(const_render_data, &render_data, sizeof(render_data));
+            cudaMemcpyToSymbol(const_all_meshes, &all_mesh_struct, sizeof(all_mesh_struct));
         }
 
         AllMeshes get_meshes() {
@@ -176,8 +180,8 @@ dim3 get_block_size(int array_width, int array_height, dim3 thread_dim) {
 void run_ray_tracer(Scene *scene, int current_time_ms) {
     //run the raytacing script on the gpu and store the result in the data_obj previous_render
     //assign memory on the gpu 
-    ReadOnlyDeviceValue<RenderData> r_data(scene->render_data);
     ReadOnlyDeviceValue<int> current_time(current_time_ms);
+    ReadOnlyDeviceValue<int> device_frame_num(scene->frame_num);
 
     ReadOnlyDeviceArray<float> prev_render(scene->previous_render);
 
@@ -186,7 +190,7 @@ void run_ray_tracer(Scene *scene, int current_time_ms) {
     dim3 thread_dim(16, 16);  //max is 1024
     dim3 block_dim = get_block_size(scene->cam_data.image_width, scene->cam_data.image_height, thread_dim);
 
-    get_pixel_colour<<<block_dim, thread_dim>>>(image_pixels.array, prev_render.device_pointer, r_data.device_pointer, current_time.device_pointer);  //launch kernel
+    get_pixel_colour<<<block_dim, thread_dim>>>(image_pixels.array, prev_render.device_pointer, current_time.device_pointer, device_frame_num.device_pointer);  //launch kernel
 
     cudaDeviceSynchronize();  //wait until gpu has finished
 
@@ -196,8 +200,8 @@ void run_ray_tracer(Scene *scene, int current_time_ms) {
     }
 
     //free memory
-    r_data.free_memory();
     current_time.free_memory();
+    device_frame_num.free_memory();
     prev_render.free_memory();
     image_pixels.free_memory();
 }
@@ -206,7 +210,7 @@ void run_ray_tracer(Scene *scene, int current_time_ms) {
 void render(Scene *scene, int current_time_ms) {
     //run the ray tracer to render a scene and store the resulting pixel values in the previous_render in the scene object
     run_ray_tracer(scene, current_time_ms);  //result stored in the previous render
-    scene->render_data.frame_num++;
+    scene->frame_num++;
 
     cudaError_t error = cudaPeekAtLastError();
     check_error(error);
