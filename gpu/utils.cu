@@ -7,6 +7,8 @@ class Vec3 {
         float y;
         float z;
 
+        __device__ Vec3() {}
+
         __host__ __device__ Vec3(float val_x, float val_y, float val_z) {
             x = val_x;
             y = val_y;
@@ -18,8 +20,6 @@ class Vec3 {
             y = vector.y;
             z = vector.z;
         }
-
-        __device__ Vec3() {}
 
         //common operations
         __host__ __device__ Vec3 operator+(Vec3 other_vec) {
