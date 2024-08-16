@@ -145,7 +145,7 @@ class RenderSettings {
         void assign_default() {
             //these settings can be changed
             reflect_limit = 5;
-            rays_per_pixel = 100;
+            rays_per_pixel = 5;
 
             antialias = true;
 
@@ -169,9 +169,7 @@ Scene create_scene(int img_width, int img_height) {
 
     int len_pixel_array = img_width * img_height * 3;
 
-    std::vector<float> previous_render(len_pixel_array);
-
-    return Scene{cam.gpu_struct, render_settings.gpu_struct, meshes.spheres, meshes.triangles, meshes.quads, meshes.one_way_quads, len_pixel_array, previous_render};
+    return Scene(cam.gpu_struct, render_settings.gpu_struct, meshes.spheres, meshes.triangles, meshes.quads, meshes.one_way_quads, len_pixel_array);
 }
 
 

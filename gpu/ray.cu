@@ -19,6 +19,9 @@ __host__ __device__ struct CamData {
 };
 
 
+__constant__ CamData const_cam_data;
+
+
 __device__ struct RayHitData {
     bool ray_hits;
     float ray_travelled_dist;
@@ -50,7 +53,7 @@ __device__ class Ray {
 
         bool antialias;
 
-        __device__ Ray(int p_x, int p_y, uint *state, bool should_antialias, CamData *cam_data) {
+        __device__ Ray(int p_x, int p_y, uint *state, bool should_antialias) {
             pixel_x = p_x;
             pixel_y = p_y;
 
@@ -58,7 +61,7 @@ __device__ class Ray {
 
             antialias = should_antialias;
 
-            set_direction_origin(cam_data);
+            set_direction_origin();
         }
 
         __device__ Vec3 get_pos(float dist) {
@@ -96,20 +99,20 @@ __device__ class Ray {
         }
     
     private:
-        __device__ Vec3 screen_to_world(int x, int y, CamData *cam_data) {
+        __device__ Vec3 screen_to_world(int x, int y) {
             //convert a point (x, y) on the viewport projection plane into a world space coordinate
             Vec3 local_pos;
 
-            local_pos.x = x * cam_data->delta_u;
-            local_pos.y = -y * cam_data->delta_v;
+            local_pos.x = x * const_cam_data.delta_u;
+            local_pos.y = -y * const_cam_data.delta_v;
             local_pos.z = 0;
 
-            return Vec3(cam_data->tl_position + local_pos);
+            return Vec3(const_cam_data.tl_position + local_pos);
         }
 
-        __device__ void set_direction_origin(CamData *cam_data) {
-            Vec3 view_pos = screen_to_world(pixel_x, pixel_y, cam_data);
-            Vec3 o = cam_data->pos;
+        __device__ void set_direction_origin() {
+            Vec3 view_pos = screen_to_world(pixel_x, pixel_y);
+            Vec3 o = const_cam_data.pos;
             Vec3 dir = view_pos - o;
 
             origin = o;

@@ -48,11 +48,11 @@ __device__ RayCollision get_specific_mesh_collision(Ray *ray, T *meshes, int num
 }
 
 
-__device__ RayCollision get_ray_collision(Ray *ray, AllMeshes *meshes) {
-    RayCollision sphere_collision = get_specific_mesh_collision<Sphere>(ray, meshes->spheres, meshes->num_spheres);
-    RayCollision triangle_collision = get_specific_mesh_collision<Triangle>(ray, meshes->triangles, meshes->num_triangles);
-    RayCollision quad_collision = get_specific_mesh_collision<Quad>(ray, meshes->quads, meshes->num_quads);
-    RayCollision one_way_quad_collision = get_specific_mesh_collision<OneWayQuad>(ray, meshes->one_way_quads, meshes->num_one_way_quads);
+__device__ RayCollision get_ray_collision(Ray *ray) {
+    RayCollision sphere_collision = get_specific_mesh_collision<Sphere>(ray, const_all_meshes.spheres, const_all_meshes.num_spheres);
+    RayCollision triangle_collision = get_specific_mesh_collision<Triangle>(ray, const_all_meshes.triangles, const_all_meshes.num_triangles);
+    RayCollision quad_collision = get_specific_mesh_collision<Quad>(ray, const_all_meshes.quads, const_all_meshes.num_quads);
+    RayCollision one_way_quad_collision = get_specific_mesh_collision<OneWayQuad>(ray, const_all_meshes.one_way_quads, const_all_meshes.num_one_way_quads);
 
     RayCollision closest_collision = sphere_collision;
 
@@ -73,14 +73,14 @@ __device__ RayCollision get_ray_collision(Ray *ray, AllMeshes *meshes) {
 }
 
 
-__device__ Vec3 trace_ray(Ray ray, AllMeshes *meshes, RenderData *render_data) {
+__device__ Vec3 trace_ray(Ray ray, RenderData *render_data) {
     Vec3 final_colour(0, 0, 0);
     Vec3 current_ray_colour(1, 1, 1);
 
     for (int _ = 0; _ < render_data->reflection_limit; _++) {
         ray.apply_antialias();
 
-        RayCollision collision = get_ray_collision(&ray, meshes);
+        RayCollision collision = get_ray_collision(&ray);
 
         if (!collision.hit_data.ray_hits) {
             //ray has not hit anything - it has hit sky
@@ -101,11 +101,11 @@ __device__ Vec3 trace_ray(Ray ray, AllMeshes *meshes, RenderData *render_data) {
 }
 
 
-__device__ Vec3 get_ray_colour(Vec3 previous_colour, Ray ray, AllMeshes *meshes, RenderData *render_data) {
+__device__ Vec3 get_ray_colour(Vec3 previous_colour, Ray ray, RenderData *render_data) {
     Vec3 colour(0, 0, 0);
 
     for (int _ = 0; _ < render_data->rays_per_pixel; _++) {
-        Vec3 ray_colour = trace_ray(ray, meshes, render_data);  //passing by value copies the ray, so we can comfortably make changes to it
+        Vec3 ray_colour = trace_ray(ray, render_data);  //passing by value copies the ray, so we can comfortably make changes to it
         colour += ray_colour;
     }
 
@@ -118,22 +118,22 @@ __device__ Vec3 get_ray_colour(Vec3 previous_colour, Ray ray, AllMeshes *meshes,
 }
 
 
-__global__ void get_pixel_colour(float *pixel_array, float *previous_render, CamData *camera_data, AllMeshes *mesh_data, RenderData *render_data, int *current_time) {
+__global__ void get_pixel_colour(float *pixel_array, float *previous_render, RenderData *render_data, int *current_time) {
     //TODO: the number of params in this function is simply obscene: use a struct to clean things up
     int pixel_coord_x = threadIdx.x + blockIdx.x * blockDim.x;
     int pixel_coord_y = threadIdx.y + blockIdx.y * blockDim.y;
 
-    if (pixel_coord_x >= camera_data->image_width || pixel_coord_y >= camera_data->image_height) {return;}  //account for grid size being too big
+    if (pixel_coord_x >= const_cam_data.image_width || pixel_coord_y >= const_cam_data.image_height) {return;}  //account for grid size being too big
     
-    int array_index = (pixel_coord_y * camera_data->image_width + pixel_coord_x) * 3;  //multiply by 3 to account for each pixel having r, b, g values
+    int array_index = (pixel_coord_y * const_cam_data.image_width + pixel_coord_x) * 3;  //multiply by 3 to account for each pixel having r, b, g values
 
     Vec3 previous_colour(previous_render[array_index], previous_render[array_index + 1], previous_render[array_index + 2]);
 
     uint rng_state = array_index * 3145739 + *current_time * 6291469;
 
-    Ray ray(pixel_coord_x, pixel_coord_y, &rng_state, render_data->antialias, camera_data);
+    Ray ray(pixel_coord_x, pixel_coord_y, &rng_state, render_data->antialias);
 
-    Vec3 colour = get_ray_colour(previous_colour, ray, mesh_data, render_data);
+    Vec3 colour = get_ray_colour(previous_colour, ray, render_data);
 
     pixel_array[array_index] = colour.x;
     pixel_array[array_index + 1] = colour.y;

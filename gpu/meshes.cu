@@ -235,3 +235,6 @@ __device__ struct AllMeshes {
     int num_quads;
     int num_one_way_quads;
 };
+
+
+__constant__ AllMeshes const_all_meshes;

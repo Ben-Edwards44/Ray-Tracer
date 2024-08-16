@@ -106,18 +106,61 @@ class ReadOnlyDeviceValue {
 };
 
 
-struct Scene {
-    CamData cam_data;
-    RenderData render_data;
+class Scene {
+    public:
+        CamData cam_data;
+        RenderData render_data;
 
-    std::vector<Sphere> spheres;
-    std::vector<Triangle> triangles;
-    std::vector<Quad> quads;
-    std::vector<OneWayQuad> one_way_quads;
+        std::vector<Sphere> spheres;
+        std::vector<Triangle> triangles;
+        std::vector<Quad> quads;
+        std::vector<OneWayQuad> one_way_quads;
 
-    int len_pixel_array;
+        int len_pixel_array;
 
-    std::vector<float> previous_render;
+        std::vector<float> previous_render;
+
+        AllMeshes all_mesh_struct;
+
+        Scene(CamData cam, RenderData r_data, std::vector<Sphere> s, std::vector<Triangle> t, std::vector<Quad> q, std::vector<OneWayQuad> o_q, int len) {
+            cam_data = cam;
+            render_data = r_data;
+            spheres = s;
+            triangles = t;
+            quads = q;
+            one_way_quads = o_q;
+            len_pixel_array = len;
+
+            previous_render = std::vector<float>(len_pixel_array);
+
+            all_mesh_struct = get_meshes();
+
+            assign_constant_mem();
+        }
+
+    private:
+        void assign_constant_mem() {
+            //to be called before first scene (NOTE: no need to free constant memory)
+            cudaMemcpyToSymbol(const_all_meshes, &all_mesh_struct, sizeof(all_mesh_struct));
+            cudaMemcpyToSymbol(const_cam_data, &cam_data, sizeof(cam_data));
+        }
+
+        AllMeshes get_meshes() {
+            //NOTE: I'm not sure I ever free the memory used here... (I'll just leave it for now)
+            ReadOnlyDeviceArray<Sphere> d_spheres(spheres);
+            ReadOnlyDeviceArray<Triangle> d_triangles(triangles);
+            ReadOnlyDeviceArray<Quad> d_quads(quads);
+            ReadOnlyDeviceArray<OneWayQuad> d_one_way_quads(one_way_quads);
+
+            int num_spheres = spheres.size();
+            int num_triangles = triangles.size();
+            int num_quads = quads.size();
+            int num_one_way_quads = one_way_quads.size();
+
+            AllMeshes meshes{d_spheres.device_pointer, d_triangles.device_pointer, d_quads.device_pointer, d_one_way_quads.device_pointer, num_spheres, num_triangles, num_quads, num_one_way_quads};
+
+            return meshes;
+        }
 };
 
 
@@ -130,28 +173,9 @@ dim3 get_block_size(int array_width, int array_height, dim3 thread_dim) {
 }
 
 
-AllMeshes get_meshes(Scene *scene) {
-    //NOTE: I'm not sure I ever free the memory used here... (I'll just leave it for now)
-    ReadOnlyDeviceArray<Sphere> spheres(scene->spheres);
-    ReadOnlyDeviceArray<Triangle> triangles(scene->triangles);
-    ReadOnlyDeviceArray<Quad> quads(scene->quads);
-    ReadOnlyDeviceArray<OneWayQuad> one_way_quads(scene->one_way_quads);
-
-    int num_spheres = scene->spheres.size();
-    int num_triangles = scene->triangles.size();
-    int num_quads = scene->quads.size();
-    int num_one_way_quads = scene->one_way_quads.size();
-
-    AllMeshes meshes{spheres.device_pointer, triangles.device_pointer, quads.device_pointer, one_way_quads.device_pointer, num_spheres, num_triangles, num_quads, num_one_way_quads};
-
-    return meshes;
-}
-
-
 void run_ray_tracer(Scene *scene, int current_time_ms) {
     //run the raytacing script on the gpu and store the result in the data_obj previous_render
     //assign memory on the gpu 
-    ReadOnlyDeviceValue<CamData> device_cam_data(scene->cam_data);
     ReadOnlyDeviceValue<RenderData> r_data(scene->render_data);
     ReadOnlyDeviceValue<int> current_time(current_time_ms);
 
@@ -159,12 +183,10 @@ void run_ray_tracer(Scene *scene, int current_time_ms) {
 
     ReadWriteDeviceArray<float> image_pixels(scene->len_pixel_array);
 
-    ReadOnlyDeviceValue<AllMeshes> meshes(get_meshes(scene));
-
     dim3 thread_dim(16, 16);  //max is 1024
     dim3 block_dim = get_block_size(scene->cam_data.image_width, scene->cam_data.image_height, thread_dim);
 
-    get_pixel_colour<<<block_dim, thread_dim>>>(image_pixels.array, prev_render.device_pointer, device_cam_data.device_pointer, meshes.device_pointer, r_data.device_pointer, current_time.device_pointer);  //launch kernel
+    get_pixel_colour<<<block_dim, thread_dim>>>(image_pixels.array, prev_render.device_pointer, r_data.device_pointer, current_time.device_pointer);  //launch kernel
 
     cudaDeviceSynchronize();  //wait until gpu has finished
 
@@ -174,12 +196,10 @@ void run_ray_tracer(Scene *scene, int current_time_ms) {
     }
 
     //free memory
-    device_cam_data.free_memory();
     r_data.free_memory();
     current_time.free_memory();
     prev_render.free_memory();
     image_pixels.free_memory();
-    meshes.free_memory();
 }
 
 
