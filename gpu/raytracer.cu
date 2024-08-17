@@ -54,6 +54,7 @@ __device__ RayCollision get_ray_collision(Ray *ray) {
     RayCollision triangle_collision = get_specific_mesh_collision<Triangle>(ray, const_all_meshes.triangles, const_all_meshes.num_triangles);
     RayCollision quad_collision = get_specific_mesh_collision<Quad>(ray, const_all_meshes.quads, const_all_meshes.num_quads);
     RayCollision one_way_quad_collision = get_specific_mesh_collision<OneWayQuad>(ray, const_all_meshes.one_way_quads, const_all_meshes.num_one_way_quads);
+    RayCollision cuboid_collision = get_specific_mesh_collision<Cuboid>(ray, const_all_meshes.cuboids, const_all_meshes.num_cuboids);
 
     RayCollision closest_collision = sphere_collision;
 
@@ -68,6 +69,9 @@ __device__ RayCollision get_ray_collision(Ray *ray) {
     if (one_way_quad_collision.hit_data.ray_hits && one_way_quad_collision.hit_data.ray_travelled_dist < closest_collision.hit_data.ray_travelled_dist) {
         //one way quad is actually better collision
         closest_collision = one_way_quad_collision;
+    }
+    if (cuboid_collision.hit_data.ray_hits && cuboid_collision.hit_data.ray_travelled_dist < closest_collision.hit_data.ray_travelled_dist) {
+        closest_collision = cuboid_collision;
     }
 
     return closest_collision;

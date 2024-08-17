@@ -115,6 +115,7 @@ class Scene {
         std::vector<Triangle> triangles;
         std::vector<Quad> quads;
         std::vector<OneWayQuad> one_way_quads;
+        std::vector<Cuboid> cuboids;
 
         int len_pixel_array;
         int frame_num;
@@ -123,13 +124,14 @@ class Scene {
 
         AllMeshes all_mesh_struct;
 
-        Scene(CamData cam, RenderData r_data, std::vector<Sphere> s, std::vector<Triangle> t, std::vector<Quad> q, std::vector<OneWayQuad> o_q, int len) {
+        Scene(CamData cam, RenderData r_data, std::vector<Sphere> s, std::vector<Triangle> t, std::vector<Quad> q, std::vector<OneWayQuad> o_q, std::vector<Cuboid> c, int len) {
             cam_data = cam;
             render_data = r_data;
             spheres = s;
             triangles = t;
             quads = q;
             one_way_quads = o_q;
+            cuboids = c;
 
             len_pixel_array = len;
             frame_num = 0;
@@ -155,13 +157,15 @@ class Scene {
             ReadOnlyDeviceArray<Triangle> d_triangles(triangles);
             ReadOnlyDeviceArray<Quad> d_quads(quads);
             ReadOnlyDeviceArray<OneWayQuad> d_one_way_quads(one_way_quads);
+            ReadOnlyDeviceArray<Cuboid> d_cuboids(cuboids);
 
             int num_spheres = spheres.size();
             int num_triangles = triangles.size();
             int num_quads = quads.size();
             int num_one_way_quads = one_way_quads.size();
+            int num_cuboids = cuboids.size();
 
-            AllMeshes meshes{d_spheres.device_pointer, d_triangles.device_pointer, d_quads.device_pointer, d_one_way_quads.device_pointer, num_spheres, num_triangles, num_quads, num_one_way_quads};
+            AllMeshes meshes{d_spheres.device_pointer, d_triangles.device_pointer, d_quads.device_pointer, d_one_way_quads.device_pointer, d_cuboids.device_pointer, num_spheres, num_triangles, num_quads, num_one_way_quads, num_cuboids};
 
             return meshes;
         }

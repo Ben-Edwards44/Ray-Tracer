@@ -224,16 +224,76 @@ __host__ __device__ class OneWayQuad : public Quad {
 };
 
 
+__host__ __device__ class Cuboid {
+    public:
+        Material material;
+
+        __host__ Cuboid(Vec3 tl_near_pos, float width, float height, float depth, Material mat) {
+            material = mat;
+
+            create_faces(tl_near_pos, width, height, depth);
+        }
+
+        __device__ RayHitData hit(Ray *ray) {
+            RayHitData hit_data;
+
+            //default values
+            hit_data.ray_hits = false;
+            hit_data.ray_travelled_dist = INF;
+
+            for (int i = 0; i < 6; i++) {
+                RayHitData face_hit = faces[i].hit(ray);
+
+                if (face_hit.ray_hits && face_hit.ray_travelled_dist < hit_data.ray_travelled_dist) {
+                    //this face is closest to camera
+                    hit_data = face_hit;
+                }
+            }
+
+            return hit_data;
+        }
+
+    private:
+        Quad faces[6];
+
+        __host__ void create_faces(Vec3 tl_near, float width, float height, float depth) {
+            //create vectors so we can use vector arithmetic
+            Vec3 w(width, 0, 0);
+            Vec3 h(0, height, 0);
+            Vec3 d(0, 0, depth);
+
+            //get the corners of the cuboid
+            Vec3 tr_near = tl_near + w;
+            Vec3 br_near = tr_near - h;
+            Vec3 bl_near = tl_near - h;
+            Vec3 tl_far = tl_near + d;
+            Vec3 tr_far = tl_far + w;
+            Vec3 br_far = tr_far - h;
+            Vec3 bl_far = tl_far - h;
+
+            //assign the faces
+            faces[0] = Quad(tl_near, tr_near, br_near, bl_near, material);  //front face
+            faces[1] = Quad(tl_far, tr_far, br_far, bl_far, material);  //back face
+            faces[2] = Quad(tl_near, bl_near, bl_far, tl_far, material);  //left face
+            faces[3] = Quad(tr_near, br_near, br_far, tr_far, material);  //right face
+            faces[4] = Quad(bl_near, br_near, br_far, bl_far, material);  //bottom face
+            faces[5] = Quad(tl_near, tr_near, tr_far, tl_far, material);  //top face
+        }
+};
+
+
 __device__ struct AllMeshes {
     Sphere *spheres;
     Triangle *triangles;
     Quad *quads;
     OneWayQuad *one_way_quads;
+    Cuboid *cuboids;
 
     int num_spheres;
     int num_triangles;
     int num_quads;
     int num_one_way_quads;
+    int num_cuboids;
 };
 
 

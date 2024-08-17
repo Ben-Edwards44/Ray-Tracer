@@ -62,6 +62,7 @@ class Meshes {
         std::vector<Triangle> triangles;
         std::vector<Quad> quads;
         std::vector<OneWayQuad> one_way_quads;
+        std::vector<Cuboid> cuboids;
 
         Meshes() {
             create_meshes();
@@ -82,7 +83,26 @@ class Meshes {
             }
         }
 
-        void create_cornell_box(Vec3 tl_near_pos, float width, float height, float depth) {
+        void test_scene() {
+            //setup simple test scene with a cornell box, suzanne mesh and sphere
+            create_cornell_box(Vec3(-0.5, 0.5, 1.2), 1, 1, 1, 0.6);
+
+            Material monkey_mat{Vec3(1, 1, 1), 0, Vec3(0, 0, 0), DIFFUSE};
+
+            Object m("low_poly_monkey.obj");
+            m.enlarge(0.3);
+            m.rotate(0, 2.3, 0);
+            m.translate(0.1, -0.1, 1.6);
+
+            add_obj_triangles(m, monkey_mat);
+
+            Material sphere_mat{Vec3(0.8, 0.8, 0.8), 0, Vec3(0, 0, 0), MIRROR};
+            Sphere sphere(Vec3(-0.25, -0.25, 1.95), 0.25, sphere_mat);
+
+            spheres.push_back(sphere);
+        }
+
+        void create_cornell_box(Vec3 tl_near_pos, float width, float height, float depth, float light_width) {
             Material floor{Vec3(0.1, 0.8, 0.1), 0, Vec3(0, 0, 0), DIFFUSE};
             Material l_wall{Vec3(1, 0.2, 0.2), 0, Vec3(0, 0, 0), DIFFUSE};
             Material r_wall{Vec3(0.3, 0.3, 1), 0, Vec3(0, 0, 0), DIFFUSE};
@@ -103,22 +123,17 @@ class Meshes {
             one_way_quads.push_back(OneWayQuad(tl_near_pos, tl_near_pos + w, tl_near_pos + w - h, tl_near_pos - h, front, false));  //front wall is one way so we can see through it
 
             //add the light
-            Material light{Vec3(0, 0, 0), 5, Vec3(1, 1, 1), DIFFUSE};
-            spheres.push_back(Sphere(tl_near_pos + w / 2 + d / 2 + Vec3(0, 1, 0) * 0.2, 0.4, light));
+            Material light_mat{Vec3(0, 0, 0), 6, Vec3(1, 1, 1), DIFFUSE};
+
+            Vec3 light_tl_near_pos(tl_near_pos.x + width / 2 - light_width / 2, tl_near_pos.y, tl_near_pos.z + depth / 2 - light_width / 2);  //ensure light is in center of roof
+            Cuboid light(light_tl_near_pos, light_width, 0.04, light_width, light_mat);
+
+            cuboids.push_back(light);
         }
 
         void create_meshes() {
             //these meshes can be changed
-            create_cornell_box(Vec3(-0.5, 0.5, 1.2), 1, 1, 1);
-
-            Material white_mat{Vec3(1, 1, 1), 0, Vec3(0, 0, 0), DIFFUSE};
-
-            Object m("monkey.obj");
-            m.enlarge(0.3);
-            m.rotate(0, 2.5, 0);
-            m.translate(0, 0, 1.8);
-
-            add_obj_triangles(m, white_mat);
+            test_scene();
         }
 };
 
@@ -145,7 +160,7 @@ class RenderSettings {
         void assign_default() {
             //these settings can be changed
             reflect_limit = 5;
-            rays_per_pixel = 5;
+            rays_per_pixel = 1000;
 
             antialias = true;
 
@@ -167,7 +182,7 @@ Scene create_scene(int img_width, int img_height) {
 
     int len_pixel_array = img_width * img_height * 3;
 
-    return Scene(cam.gpu_struct, render_settings.gpu_struct, meshes.spheres, meshes.triangles, meshes.quads, meshes.one_way_quads, len_pixel_array);
+    return Scene(cam.gpu_struct, render_settings.gpu_struct, meshes.spheres, meshes.triangles, meshes.quads, meshes.one_way_quads, meshes.cuboids, len_pixel_array);
 }
 
 

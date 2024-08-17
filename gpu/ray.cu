@@ -1,7 +1,7 @@
 #include "utils.cu"
 
 
-const float ANTIALIAS_OFFSET_RANGE = 0.0015;
+const float ANTIALIAS_OFFSET_RANGE = 0.001;
 
 
 __host__ __device__ struct CamData {
