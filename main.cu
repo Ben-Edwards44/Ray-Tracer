@@ -69,10 +69,6 @@ class Meshes {
         }
 
     private:
-        const int DIFFUSE = 0;
-        const int MIRROR = 1;
-        const int METAL = 2;
-
         void add_obj_triangles(Object obj, Material mat) {
             //parse the object faces into triangles and add them to the list of triangles
             for (std::vector<float3> face : obj.faces) {
@@ -85,9 +81,9 @@ class Meshes {
 
         void test_scene() {
             //setup simple test scene with a cornell box, suzanne mesh and sphere
-            create_cornell_box(Vec3(-0.5, 0.5, 1.2), 1, 1, 1, 0.6);
+            create_cornell_box(Vec3(-0.5, 0.5, 1.2), 1, 1, 1, 0.5);
 
-            Material monkey_mat{Vec3(1, 1, 1), 0, Vec3(0, 0, 0), DIFFUSE};
+            Material monkey_mat{Vec3(1, 1, 1), 0, Vec3(0, 0, 0), Material::DIFFUSE};
 
             Object m("low_poly_monkey.obj");
             m.enlarge(0.3);
@@ -96,19 +92,19 @@ class Meshes {
 
             add_obj_triangles(m, monkey_mat);
 
-            Material sphere_mat{Vec3(0.8, 0.8, 0.8), 0, Vec3(0, 0, 0), MIRROR};
+            Material sphere_mat{Vec3(0.8, 0.8, 0.8), 0, Vec3(0, 0, 0), Material::MIRROR};
             Sphere sphere(Vec3(-0.25, -0.25, 1.95), 0.25, sphere_mat);
 
             spheres.push_back(sphere);
         }
 
         void create_cornell_box(Vec3 tl_near_pos, float width, float height, float depth, float light_width) {
-            Material floor{Vec3(0.1, 0.8, 0.1), 0, Vec3(0, 0, 0), DIFFUSE};
-            Material l_wall{Vec3(1, 0.2, 0.2), 0, Vec3(0, 0, 0), DIFFUSE};
-            Material r_wall{Vec3(0.3, 0.3, 1), 0, Vec3(0, 0, 0), DIFFUSE};
-            Material back{Vec3(0.2, 0.2, 0.2), 0, Vec3(0, 0, 0), DIFFUSE};
-            Material roof{Vec3(0.9, 0.9, 0.9), 0, Vec3(0, 0, 0), DIFFUSE};
-            Material front{Vec3(1, 1, 1), 0, Vec3(0, 0, 0), DIFFUSE};
+            Material floor{Vec3(0.1, 0.8, 0.1), 0, Vec3(0, 0, 0), Material::DIFFUSE};
+            Material l_wall{Vec3(1, 0.2, 0.2), 0, Vec3(0, 0, 0), Material::DIFFUSE};
+            Material r_wall{Vec3(0.3, 0.3, 1), 0, Vec3(0, 0, 0), Material::DIFFUSE};
+            Material back{Vec3(0.2, 0.2, 0.2), 0, Vec3(0, 0, 0), Material::DIFFUSE};
+            Material roof{Vec3(0.9, 0.9, 0.9), 0, Vec3(0, 0, 0), Material::DIFFUSE};
+            Material front{Vec3(1, 1, 1), 0, Vec3(0, 0, 0), Material::DIFFUSE};
 
             //offset vectors
             Vec3 w(width, 0, 0);
@@ -123,7 +119,7 @@ class Meshes {
             one_way_quads.push_back(OneWayQuad(tl_near_pos, tl_near_pos + w, tl_near_pos + w - h, tl_near_pos - h, front, false));  //front wall is one way so we can see through it
 
             //add the light
-            Material light_mat{Vec3(0, 0, 0), 6, Vec3(1, 1, 1), DIFFUSE};
+            Material light_mat{Vec3(0, 0, 0), 6, Vec3(1, 1, 1), Material::DIFFUSE};
 
             Vec3 light_tl_near_pos(tl_near_pos.x + width / 2 - light_width / 2, tl_near_pos.y, tl_near_pos.z + depth / 2 - light_width / 2);  //ensure light is in center of roof
             Cuboid light(light_tl_near_pos, light_width, 0.04, light_width, light_mat);
@@ -160,7 +156,7 @@ class RenderSettings {
         void assign_default() {
             //these settings can be changed
             reflect_limit = 5;
-            rays_per_pixel = 1000;
+            rays_per_pixel = 10;
 
             antialias = true;
 

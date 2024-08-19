@@ -31,6 +31,10 @@ __device__ struct RayHitData {
 
 
 __host__ __device__ struct Material {
+    static const int DIFFUSE = 0;
+    static const int MIRROR = 1;
+    static const int METAL = 2;
+
     Vec3 colour;
     float emission_strength;
     Vec3 emission_colour;
@@ -72,9 +76,9 @@ __device__ class Ray {
             //reflect ray after hitting an object
 
             Vec3 new_direction;
-            if (obj_material.mat_type == 0) {
+            if (obj_material.mat_type == Material::DIFFUSE) {
                 new_direction = true_lambertian_reflect(hit_data);
-            } else if (obj_material.mat_type == 1) {
+            } else if (obj_material.mat_type == Material::MIRROR) {
                 new_direction = perfect_reflect(hit_data);
             }
             else {
