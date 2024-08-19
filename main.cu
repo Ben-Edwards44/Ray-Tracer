@@ -64,8 +64,12 @@ class Meshes {
         std::vector<OneWayQuad> one_way_quads;
         std::vector<Cuboid> cuboids;
 
-        Meshes() {
-            create_meshes();
+        Meshes(int test_scene) {
+            if (test_scene == 0) {
+                monkey_test_scene();
+            } else if (test_scene == 1) {
+                reflection_test_scene();
+            }
         }
 
     private:
@@ -79,11 +83,11 @@ class Meshes {
             }
         }
 
-        void test_scene() {
+        void monkey_test_scene() {
             //setup simple test scene with a cornell box, suzanne mesh and sphere
             create_cornell_box(Vec3(-0.5, 0.5, 1.2), 1, 1, 1, 0.5);
 
-            Material monkey_mat{Vec3(1, 1, 1), 0, Vec3(0, 0, 0), Material::DIFFUSE};
+            Material monkey_mat{Vec3(1, 1, 1), 0, Vec3(0, 0, 0), 0};
 
             Object m("low_poly_monkey.obj");
             m.enlarge(0.3);
@@ -92,19 +96,34 @@ class Meshes {
 
             add_obj_triangles(m, monkey_mat);
 
-            Material sphere_mat{Vec3(0.8, 0.8, 0.8), 0, Vec3(0, 0, 0), Material::MIRROR};
+            Material sphere_mat{Vec3(0.8, 0.8, 0.8), 0, Vec3(0, 0, 0), 1};
             Sphere sphere(Vec3(-0.25, -0.25, 1.95), 0.25, sphere_mat);
 
             spheres.push_back(sphere);
         }
 
+        void reflection_test_scene() {
+            //simple test scene with spheres of different smoothness values
+            create_cornell_box(Vec3(-0.5, 0.5, 1.2), 1, 1, 1, 0.5);
+
+            Material a{Vec3(1, 1, 1), 0, Vec3(0, 0, 0), 0};
+            Material b{Vec3(1, 1, 1), 0, Vec3(0, 0, 0), 0.4};
+            Material c{Vec3(1, 1, 1), 0, Vec3(0, 0, 0), 0.8};
+            Material d{Vec3(1, 1, 1), 0, Vec3(0, 0, 0), 1};
+
+            spheres.push_back(Sphere(Vec3(-0.2, 0.2, 1.7), 0.15, a));
+            spheres.push_back(Sphere(Vec3(0.2, 0.2, 1.7), 0.15, b));
+            spheres.push_back(Sphere(Vec3(-0.2, -0.2, 1.7), 0.15, c));
+            spheres.push_back(Sphere(Vec3(0.2, -0.2, 1.7), 0.15, d));
+        }
+
         void create_cornell_box(Vec3 tl_near_pos, float width, float height, float depth, float light_width) {
-            Material floor{Vec3(0.1, 0.8, 0.1), 0, Vec3(0, 0, 0), Material::DIFFUSE};
-            Material l_wall{Vec3(1, 0.2, 0.2), 0, Vec3(0, 0, 0), Material::DIFFUSE};
-            Material r_wall{Vec3(0.3, 0.3, 1), 0, Vec3(0, 0, 0), Material::DIFFUSE};
-            Material back{Vec3(0.2, 0.2, 0.2), 0, Vec3(0, 0, 0), Material::DIFFUSE};
-            Material roof{Vec3(0.9, 0.9, 0.9), 0, Vec3(0, 0, 0), Material::DIFFUSE};
-            Material front{Vec3(1, 1, 1), 0, Vec3(0, 0, 0), Material::DIFFUSE};
+            Material floor{Vec3(0.1, 0.8, 0.1), 0, Vec3(0, 0, 0), 0};
+            Material l_wall{Vec3(1, 0.2, 0.2), 0, Vec3(0, 0, 0), 0};
+            Material r_wall{Vec3(0.3, 0.3, 1), 0, Vec3(0, 0, 0), 0};
+            Material back{Vec3(0.2, 0.2, 0.2), 0, Vec3(0, 0, 0), 0};
+            Material roof{Vec3(0.9, 0.9, 0.9), 0, Vec3(0, 0, 0), 0};
+            Material front{Vec3(1, 1, 1), 0, Vec3(0, 0, 0), 0};
 
             //offset vectors
             Vec3 w(width, 0, 0);
@@ -119,17 +138,12 @@ class Meshes {
             one_way_quads.push_back(OneWayQuad(tl_near_pos, tl_near_pos + w, tl_near_pos + w - h, tl_near_pos - h, front, false));  //front wall is one way so we can see through it
 
             //add the light
-            Material light_mat{Vec3(0, 0, 0), 6, Vec3(1, 1, 1), Material::DIFFUSE};
+            Material light_mat{Vec3(0, 0, 0), 6, Vec3(1, 1, 1), 0};
 
             Vec3 light_tl_near_pos(tl_near_pos.x + width / 2 - light_width / 2, tl_near_pos.y, tl_near_pos.z + depth / 2 - light_width / 2);  //ensure light is in center of roof
             Cuboid light(light_tl_near_pos, light_width, 0.04, light_width, light_mat);
 
             cuboids.push_back(light);
-        }
-
-        void create_meshes() {
-            //these meshes can be changed
-            test_scene();
         }
 };
 
@@ -173,7 +187,7 @@ class RenderSettings {
 
 Scene create_scene(int img_width, int img_height) {
     Camera cam;
-    Meshes meshes;
+    Meshes meshes(1);
     RenderSettings render_settings(meshes.spheres.size());
 
     int len_pixel_array = img_width * img_height * 3;

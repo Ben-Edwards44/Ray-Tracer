@@ -31,18 +31,18 @@ __device__ struct RayHitData {
 
 
 __host__ __device__ struct Material {
-    static const int DIFFUSE = 0;
-    static const int MIRROR = 1;
-    static const int METAL = 2;
-
     Vec3 colour;
+
     float emission_strength;
     Vec3 emission_colour;
-    int mat_type;
 
-    //optional
-    float fuzz_level;
+    float smoothness;  //[0, 1]. 0 = perfect diffuse, 1 = perfect reflect
 };
+
+
+__device__ Vec3 lerp(Vec3 a, Vec3 b, float t) {
+    return a + (b - a) * t;
+}
 
 
 __device__ class Ray {
@@ -74,18 +74,10 @@ __device__ class Ray {
 
         __device__ void reflect(RayHitData *hit_data, Material obj_material) {
             //reflect ray after hitting an object
+            Vec3 diffuse_dir = true_lambertian_reflect(hit_data);
+            Vec3 specular_dir = perfect_reflect(hit_data);
 
-            Vec3 new_direction;
-            if (obj_material.mat_type == Material::DIFFUSE) {
-                new_direction = true_lambertian_reflect(hit_data);
-            } else if (obj_material.mat_type == Material::MIRROR) {
-                new_direction = perfect_reflect(hit_data);
-            }
-            else {
-                new_direction = fuzzy_perfect_reflect(hit_data, obj_material);
-            }
-
-            direction = new_direction;
+            direction = lerp(diffuse_dir, specular_dir, obj_material.smoothness);
             origin = hit_data->hit_point;
         }
 
@@ -152,15 +144,5 @@ __device__ class Ray {
             Vec3 reflected_vec = direction - hit_data->normal_vec * 2 * dot;
 
             return reflected_vec.normalised();
-        }
-
-        __device__ Vec3 fuzzy_perfect_reflect(RayHitData *hit_data, Material obj_material) {
-            //angle reflection = angle incidence + some noise
-            Vec3 reflected_vec = perfect_reflect(hit_data);
-            Vec3 rand_offset_vec = diffuse_reflect(hit_data) * obj_material.fuzz_level;
-
-            Vec3 new_dir = reflected_vec + rand_offset_vec;
-
-            return new_dir.normalised();
         }
 };
