@@ -1,8 +1,11 @@
+#include <cmath>
 #include "ray.cu"
 
 
 const int INF = 1 << 31 - 1;
 const float FLOAT_PRECISION_ERROR = 0.000001;
+
+const float PI = 3.141592653589793;
 
 
 struct Plane {
@@ -54,6 +57,8 @@ __host__ __device__ class Sphere {
                     hit_data.ray_travelled_dist = ray_dist;
                     hit_data.hit_point = hit_point;
                     hit_data.normal_vec = (hit_point - center).normalised();  //vector pointing from center to point of intersection
+
+                    if (material.using_texture) {assign_texture_coords(&hit_data);}
                 }
             }
 
@@ -64,6 +69,25 @@ __host__ __device__ class Sphere {
             }
 
             return hit_data;
+        }
+
+    private:
+        __device__ void assign_texture_coords(RayHitData *hit_data) {
+            //assign (u, v) texture coords (u based on latitude, v based on longitude)
+            float theta = asin((hit_data->hit_point.y - center.y) / radius);  //angle above center (on y axis)
+            float phi = acos((hit_data->hit_point.x - center.x) / radius);  //angle from center on x axis
+
+            float u = (theta + PI / 2) / PI;  //make latitude in range [0, 1]
+
+            float v_ratio = (1 - phi / PI) / 2;  //0 at left end, 0.5 at right end
+
+            bool behind = hit_data->hit_point.z > center.z;
+            int mult = 1 - 2 * behind;
+
+            float v = 1 * behind + mult * v_ratio;  //branchless method of making v loop 0 -> 0.5 when in front, then 0.5 -> 1 when behind
+
+            hit_data->u = u;
+            hit_data->v = v;
         }
 };
 

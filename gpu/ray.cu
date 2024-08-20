@@ -1,4 +1,4 @@
-#include "utils.cu"
+#include "material.cu"
 
 
 const float ANTIALIAS_OFFSET_RANGE = 0.001;
@@ -27,16 +27,9 @@ __device__ struct RayHitData {
     float ray_travelled_dist;
     Vec3 hit_point;
     Vec3 normal_vec;
-};
 
-
-__host__ __device__ struct Material {
-    Vec3 colour;
-
-    float emission_strength;
-    Vec3 emission_colour;
-
-    float smoothness;  //[0, 1]. 0 = perfect diffuse, 1 = perfect reflect
+    float u;
+    float v;
 };
 
 

@@ -99,7 +99,12 @@ __device__ Vec3 trace_ray(Ray ray) {
         Vec3 mat_emitted_light = material.emission_colour * material.emission_strength;  //TODO: precalculate
 
         final_colour += mat_emitted_light * current_ray_colour;
-        current_ray_colour *= material.colour;
+
+        if (material.using_texture) {
+            current_ray_colour *= material.texture.get_texture_colour(collision.hit_data.u, collision.hit_data.v);
+        } else {
+            current_ray_colour *= material.colour;
+        }
     }
 
     return final_colour;

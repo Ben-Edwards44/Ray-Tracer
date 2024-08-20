@@ -14,8 +14,6 @@ const float ASPECT = static_cast<float>(WIDTH) / static_cast<float>(HEIGHT);  //
 
 const std::string CAPTION = "ray tracer";
 
-const float PI = 3.141592653589793;
-
 
 class Camera {
     public:
@@ -87,7 +85,7 @@ class Meshes {
             //setup simple test scene with a cornell box, suzanne mesh and sphere
             create_cornell_box(Vec3(-0.5, 0.5, 1.2), 1, 1, 1, 0.5);
 
-            Material monkey_mat{Vec3(1, 1, 1), 0, Vec3(0, 0, 0), 0};
+            Material monkey_mat{Vec3(1, 1, 1), 0, Vec3(0, 0, 0), 0, false};
 
             Object m("low_poly_monkey.obj");
             m.enlarge(0.3);
@@ -96,7 +94,7 @@ class Meshes {
 
             add_obj_triangles(m, monkey_mat);
 
-            Material sphere_mat{Vec3(0.8, 0.8, 0.8), 0, Vec3(0, 0, 0), 1};
+            Material sphere_mat{Vec3(0.8, 0.8, 0.8), 0, Vec3(0, 0, 0), 1, false};
             Sphere sphere(Vec3(-0.25, -0.25, 1.95), 0.25, sphere_mat);
 
             spheres.push_back(sphere);
@@ -106,10 +104,13 @@ class Meshes {
             //simple test scene with spheres of different smoothness values
             create_cornell_box(Vec3(-0.5, 0.5, 1.2), 1, 1, 1, 0.5);
 
-            Material a{Vec3(1, 1, 1), 0, Vec3(0, 0, 0), 0};
-            Material b{Vec3(1, 1, 1), 0, Vec3(0, 0, 0), 0.4};
-            Material c{Vec3(1, 1, 1), 0, Vec3(0, 0, 0), 0.8};
-            Material d{Vec3(1, 1, 1), 0, Vec3(0, 0, 0), 1};
+            Texture t(Texture::CHECKERBOARD);
+            t.assign_checkerboard(Vec3(0, 1, 0), Vec3(0, 0.5, 0), 8);
+
+            Material a{Vec3(1, 1, 1), 0, Vec3(0, 0, 0), 0, true, t};
+            Material b{Vec3(1, 1, 1), 0, Vec3(0, 0, 0), 0.4, false};
+            Material c{Vec3(1, 1, 1), 0, Vec3(0, 0, 0), 0.8, false};
+            Material d{Vec3(1, 1, 1), 0, Vec3(0, 0, 0), 1, false};
 
             spheres.push_back(Sphere(Vec3(-0.2, 0.2, 1.7), 0.15, a));
             spheres.push_back(Sphere(Vec3(0.2, 0.2, 1.7), 0.15, b));
@@ -118,12 +119,12 @@ class Meshes {
         }
 
         void create_cornell_box(Vec3 tl_near_pos, float width, float height, float depth, float light_width) {
-            Material floor{Vec3(0.1, 0.8, 0.1), 0, Vec3(0, 0, 0), 0};
-            Material l_wall{Vec3(1, 0.2, 0.2), 0, Vec3(0, 0, 0), 0};
-            Material r_wall{Vec3(0.3, 0.3, 1), 0, Vec3(0, 0, 0), 0};
-            Material back{Vec3(0.2, 0.2, 0.2), 0, Vec3(0, 0, 0), 0};
-            Material roof{Vec3(0.9, 0.9, 0.9), 0, Vec3(0, 0, 0), 0};
-            Material front{Vec3(1, 1, 1), 0, Vec3(0, 0, 0), 0};
+            Material floor{Vec3(0.1, 0.8, 0.1), 0, Vec3(0, 0, 0), 0, false};
+            Material l_wall{Vec3(1, 0.2, 0.2), 0, Vec3(0, 0, 0), 0, false};
+            Material r_wall{Vec3(0.3, 0.3, 1), 0, Vec3(0, 0, 0), 0, false};
+            Material back{Vec3(0.2, 0.2, 0.2), 0, Vec3(0, 0, 0), 0, false};
+            Material roof{Vec3(0.9, 0.9, 0.9), 0, Vec3(0, 0, 0), 0, false};
+            Material front{Vec3(1, 1, 1), 0, Vec3(0, 0, 0), 0, false};
 
             //offset vectors
             Vec3 w(width, 0, 0);
@@ -138,7 +139,7 @@ class Meshes {
             one_way_quads.push_back(OneWayQuad(tl_near_pos, tl_near_pos + w, tl_near_pos + w - h, tl_near_pos - h, front, false));  //front wall is one way so we can see through it
 
             //add the light
-            Material light_mat{Vec3(0, 0, 0), 6, Vec3(1, 1, 1), 0};
+            Material light_mat{Vec3(0, 0, 0), 6, Vec3(1, 1, 1), 0, false};
 
             Vec3 light_tl_near_pos(tl_near_pos.x + width / 2 - light_width / 2, tl_near_pos.y, tl_near_pos.z + depth / 2 - light_width / 2);  //ensure light is in center of roof
             Cuboid light(light_tl_near_pos, light_width, 0.04, light_width, light_mat);
