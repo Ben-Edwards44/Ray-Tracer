@@ -1,4 +1,5 @@
 #include "utils.cu"
+#include <vector>
 
 
 __host__ __device__ class Texture {
@@ -6,6 +7,7 @@ __host__ __device__ class Texture {
     public:
         static const int GRADIENT = 0;
         static const int CHECKERBOARD = 1;
+        static const int IMAGE = 2;
 
         int type;
 
@@ -21,11 +23,22 @@ __host__ __device__ class Texture {
             num_squares = num_sq;
         }
 
+        __host__ void assign_image(int width, int height, std::vector<Vec3> rgb_values) {
+            img_tex_width = width;
+            img_tex_height = height;
+
+            allocate_memory(rgb_values);
+        }
+
         __device__ Vec3 get_texture_colour(float u, float v) {
             if (type == GRADIENT) {
                 return gradient(u, v);
             } else if (type == CHECKERBOARD) {
                 return checkerboard(u, v);
+            } else if (type == IMAGE) {
+                return image(u, v);
+            } else {
+                return Vec3(0, 0, 0);
             }
         }
 
@@ -50,6 +63,31 @@ __host__ __device__ class Texture {
             } else {
                 return dark;
             }
+        }
+
+        //image
+        int img_tex_width;
+        int img_tex_height;
+
+        Vec3 *img_rgb;
+
+        __host__ void allocate_memory(std::vector<Vec3> rgb_values) {
+            int size = sizeof(rgb_values[0]) * rgb_values.size();
+
+            cudaError_t error = cudaMalloc((void **)&img_rgb, size);  //allocate the memory
+            check_cuda_error(error);
+
+            Vec3 *rgb_array = &rgb_values[0];  //get the pointer to the underlying array
+
+            error = cudaMemcpy(img_rgb, rgb_array, size, cudaMemcpyHostToDevice);  //copy the data over
+            check_cuda_error(error);
+        }
+
+        __device__ Vec3 image(float u, float v) {
+            int u_coord = (img_tex_width - 1) * u;
+            int v_coord = (img_tex_height - 1) * v;
+
+            return img_rgb[v_coord * img_tex_width + u_coord];
         }
 };
 

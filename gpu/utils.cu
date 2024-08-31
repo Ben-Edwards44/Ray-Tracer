@@ -1,6 +1,14 @@
 #include <cmath>
 
 
+__host__ void check_cuda_error(cudaError_t error) {
+    if (error != cudaSuccess) {
+        std::string err_msg = cudaGetErrorString(error);
+        throw std::runtime_error("Error from CUDA: " + err_msg);
+    }
+}
+
+
 class Vec3 {
     public:
         float x;

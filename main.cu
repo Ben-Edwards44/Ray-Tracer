@@ -8,6 +8,10 @@
 #include <SFML/Graphics.hpp>
 
 
+
+#include <iostream>
+
+
 const int WIDTH = 1000;
 const int HEIGHT = 800;
 const float ASPECT = static_cast<float>(WIDTH) / static_cast<float>(HEIGHT);  //static cast is used to stop integer division
@@ -54,6 +58,61 @@ class Camera {
 };
 
 
+class ImageTexture {
+    public:
+        std::string PARSED_TEXTURE_FILENAME = "textures/parsed_textures.txt";
+
+        ImageTexture(std::string filename) {
+            parse_file(filename);
+        }
+
+        Texture get_device_texture() {
+            Texture t(Texture::IMAGE);
+
+            t.assign_image(width, height, rgb_values);
+
+            return t;
+        }
+
+    private:
+        int width;
+        int height;
+
+        std::vector<Vec3> rgb_values;
+
+        void parse_file(std::string filename) {
+            std::vector<std::string> lines = read_file(PARSED_TEXTURE_FILENAME);
+
+            for (int i = 0; i < lines.size(); i++) {
+                if (lines[i] == filename) {
+                    width = std::stoi(lines[i + 1]);
+                    height = std::stoi(lines[i + 2]);
+                    rgb_values = parse_rgb_values(lines[i + 3]);
+
+                    break;
+                }
+            }
+        }
+
+        std::vector<Vec3> parse_rgb_values(std::string rgb_string) {
+            std::vector<std::string> splitted = split_string(rgb_string, ' ');
+
+            std::vector<Vec3> parsed_rgb;
+
+            //NOTE: the last character will just be "", so loop to the last but one character
+            for (int i = 0; i < splitted.size() - 1; i += 3) {
+                float r = std::stof(splitted[i]);
+                float g = std::stof(splitted[i + 1]);
+                float b = std::stof(splitted[i + 2]);
+
+                parsed_rgb.push_back(Vec3(r, g, b));
+            }
+
+            return parsed_rgb;
+        }
+};
+
+
 class Meshes {
     public:
         std::vector<Sphere> spheres;
@@ -63,10 +122,18 @@ class Meshes {
         std::vector<Cuboid> cuboids;
 
         Meshes(int test_scene) {
-            if (test_scene == 0) {
-                monkey_test_scene();
-            } else if (test_scene == 1) {
-                reflection_test_scene();
+            switch (test_scene) {
+                case 0:
+                    monkey_test_scene();
+                    break;
+                case 1:
+                    reflection_test_scene();
+                    break;
+                case 2:
+                    texture_test_scene();
+                    break;
+                default:
+                    throw std::domain_error("Test scene must be number between 0 and 2 (inclusive).\n");
             }
         }
 
@@ -74,7 +141,7 @@ class Meshes {
         void add_obj_triangles(Object obj, Material mat) {
             //parse the object faces into triangles and add them to the list of triangles
             for (std::vector<float3> face : obj.faces) {
-                if (face.size() != 3) {throw std::logic_error("Only triangle meshes are supported.");}
+                if (face.size() != 3) {throw std::logic_error("Only triangle meshes are supported.\n");}
 
                 Triangle tri(Vec3(face[0]), Vec3(face[1]), Vec3(face[2]), mat);
                 triangles.push_back(tri);
@@ -104,7 +171,7 @@ class Meshes {
             //simple test scene with spheres of different smoothness values
             create_cornell_box(Vec3(-0.5, 0.5, 1.2), 1, 1, 1, 0.5);
 
-            Texture t(Texture::CHECKERBOARD);
+            Texture t(Texture::GRADIENT);
             t.assign_checkerboard(Vec3(0, 1, 0), Vec3(0, 0.5, 0), 8);
 
             Material a{Vec3(1, 1, 1), 0, Vec3(0, 0, 0), 0, true, t};
@@ -116,6 +183,16 @@ class Meshes {
             spheres.push_back(Sphere(Vec3(0.2, 0.2, 1.7), 0.15, b));
             spheres.push_back(Sphere(Vec3(-0.2, -0.2, 1.7), 0.15, c));
             spheres.push_back(Sphere(Vec3(0.2, -0.2, 1.7), 0.15, d));
+        }
+
+        void texture_test_scene() {
+            //test scene with spheres with tetxtures
+            create_cornell_box(Vec3(-0.5, 0.5, 1.2), 1, 1, 1, 0.5);
+
+            ImageTexture earth("earth.png");
+            Material earth_mat{Vec3(0, 1, 0), 0, Vec3(0, 0, 0), 0, true, earth.get_device_texture()};
+
+            spheres.push_back(Sphere(Vec3(0, 0, 1.7), 0.25, earth_mat));
         }
 
         void create_cornell_box(Vec3 tl_near_pos, float width, float height, float depth, float light_width) {
@@ -188,7 +265,7 @@ class RenderSettings {
 
 Scene create_scene(int img_width, int img_height) {
     Camera cam;
-    Meshes meshes(1);
+    Meshes meshes(2);
     RenderSettings render_settings(meshes.spheres.size());
 
     int len_pixel_array = img_width * img_height * 3;
