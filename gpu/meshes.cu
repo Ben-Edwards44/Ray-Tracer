@@ -189,42 +189,81 @@ __host__ __device__ class Quad {
 
         Quad() {}
 
-        __host__ Quad(Vec3 point1, Vec3 point2, Vec3 point3, Vec3 point4, Material mat) {
+        __host__ Quad(Vec3 p1, Vec3 p2, Vec3 p3, Vec3 p4, Material mat) {
             material = mat;
 
-            create_triangles(point1, point2, point3, point4);
+            point1 = p1;
+            point2 = p2;
+            point3 = p3;
+            point4 = p4;
+
+            create_triangles();
         }
 
         __device__ RayHitData hit(Ray *ray) {
             RayHitData t1_hit = t1.hit(ray);
             RayHitData t2_hit = t2.hit(ray);
 
-            //return whichever triangle hits (or just the 2nd one if none of them hit)
+            //get whichever triangle hits (or just the 2nd one if none of them hit)
+            RayHitData hit_data;
             if (t1_hit.ray_hits) {
-                return t1_hit;
+                hit_data = t1_hit;
             } else {
-                return t2_hit;
+                hit_data = t2_hit;
             }
+
+            if (material.using_texture) {assign_texture_coords(&hit_data);}
+
+            return hit_data;
         }
 
     protected:  //NOTE: protected is used instead of private so these can be inherited by OneWayQuad
         Triangle t1;
         Triangle t2;
 
-        void create_triangles(Vec3 point1, Vec3 point2, Vec3 point3, Vec3 point4) {
+        Vec3 point1;
+        Vec3 point2;
+        Vec3 point3;
+        Vec3 point4;
+
+        __host__ void create_triangles() {
             //a quad is just 2 triangles
             t1 = Triangle(point1, point2, point3, material);
             t2 = Triangle(point1, point4, point3, material);
+        }
+
+        __device__ void assign_texture_coords(RayHitData *hit_data) {
+            //add the (u, v) texture coords to hit data
+            //TODO: make this work for non parallelogram quads
+
+            //assuming points are ordered: BL, BR, TR, TL
+            Vec3 origin = point1;
+            Vec3 up_vec = point4 - point1;
+            Vec3 right_vec = point2 - point1;
+            Vec3 point_vec = hit_data->hit_point - origin;
+
+            //split point_vec into component parts
+            float theta = acos(point_vec.dot(right_vec) / (point_vec.magnitude() * right_vec.magnitude()));
+            Vec3 u_comp = point_vec * sin(theta);
+            Vec3 v_comp = point_vec * cos(theta);
+
+            hit_data->u = u_comp.magnitude() / up_vec.magnitude();
+            hit_data->v = v_comp.magnitude() / right_vec.magnitude();
         }
 };
 
 
 __host__ __device__ class OneWayQuad : public Quad {
     public:
-        __host__ OneWayQuad(Vec3 point1, Vec3 point2, Vec3 point3, Vec3 point4, Material mat, bool invert_normal) {
+        __host__ OneWayQuad(Vec3 p1, Vec3 p2, Vec3 p3, Vec3 p4, Material mat, bool invert_normal) {
             material = mat;
 
-            create_triangles(point1, point2, point3, point4);
+            point1 = p1;
+            point2 = p2;
+            point3 = p3;
+            point4 = p4;
+
+            create_triangles();
             get_normal_vec(invert_normal);
         }
 

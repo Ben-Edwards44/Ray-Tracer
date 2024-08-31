@@ -196,7 +196,10 @@ class Meshes {
         }
 
         void create_cornell_box(Vec3 tl_near_pos, float width, float height, float depth, float light_width) {
-            Material floor{Vec3(0.1, 0.8, 0.1), 0, Vec3(0, 0, 0), 0, false};
+            Texture floor_tex(Texture::CHECKERBOARD);
+            floor_tex.assign_checkerboard(Vec3(0.1, 0.8, 0.1), Vec3(0.1, 0.5, 0.1), 8);
+
+            Material floor{Vec3(0.1, 0.8, 0.1), 0, Vec3(0, 0, 0), 0, true, floor_tex};
             Material l_wall{Vec3(1, 0.2, 0.2), 0, Vec3(0, 0, 0), 0, false};
             Material r_wall{Vec3(0.3, 0.3, 1), 0, Vec3(0, 0, 0), 0, false};
             Material back{Vec3(0.2, 0.2, 0.2), 0, Vec3(0, 0, 0), 0, false};
