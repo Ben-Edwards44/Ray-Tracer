@@ -1,4 +1,5 @@
 #include <cmath>
+#include <stdexcept>
 
 
 __host__ void check_cuda_error(cudaError_t error) {
@@ -142,7 +143,29 @@ class Vec3 {
 
             return Vec3(s1, s2, s3);
         }
-}; 
+};
+
+
+class Vec2 {
+    public:
+        float x;
+        float y;
+
+        __device__ Vec2() {}
+
+        __host__ __device__ Vec2(float x_val, float y_val) {
+            x = x_val;
+            y = y_val;
+        }
+
+        __device__ Vec2 operator+(Vec2 other_vec) {
+            return Vec2(x + other_vec.x, y + other_vec.y);
+        }
+
+        __device__ Vec2 operator*(float scalar) {
+            return Vec2(x * scalar, y * scalar);
+        }
+};
 
 
 __device__ float pseudorandom_num(uint *state) {
