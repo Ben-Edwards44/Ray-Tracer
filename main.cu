@@ -138,13 +138,18 @@ class Meshes {
         }
 
     private:
-        void add_obj_triangles(Object obj, Material mat) {
+        void add_obj_faces(Object obj, Material mat) {
             //parse the object faces into triangles and add them to the list of triangles
             for (std::vector<float3> face : obj.faces) {
-                if (face.size() != 3) {throw std::logic_error("Only triangle meshes are supported.\n");}
-
-                Triangle tri(Vec3(face[0]), Vec3(face[1]), Vec3(face[2]), mat);
-                triangles.push_back(tri);
+                if (face.size() == 3) {
+                    Triangle tri(Vec3(face[0]), Vec3(face[1]), Vec3(face[2]), mat);
+                    triangles.push_back(tri);
+                } else if (face.size() == 4) {
+                    Quad quad(Vec3(face[0]), Vec3(face[1]), Vec3(face[2]), Vec3(face[3]), mat);
+                    quads.push_back(quad);
+                } else {
+                    throw std::logic_error("Only triangle or quad meshes are supported.\n");
+                }
             }
         }
 
@@ -159,7 +164,7 @@ class Meshes {
             m.rotate(0, 2.3, 0);
             m.translate(0.1, -0.1, 1.6);
 
-            add_obj_triangles(m, monkey_mat);
+            add_obj_faces(m, monkey_mat);
 
             Material sphere_mat{Vec3(0.8, 0.8, 0.8), 0, Vec3(0, 0, 0), 1, false};
             Sphere sphere(Vec3(-0.25, -0.25, 1.95), 0.25, sphere_mat);
@@ -192,7 +197,14 @@ class Meshes {
             ImageTexture earth("earth.png");
             Material earth_mat{Vec3(0, 1, 0), 0, Vec3(0, 0, 0), 0, true, earth.get_device_texture()};
 
-            spheres.push_back(Sphere(Vec3(0, 0, 1.7), 0.25, earth_mat));
+            //spheres.push_back(Sphere(Vec3(0, 0, 1.7), 0.25, earth_mat));
+
+            Texture grad(Texture::GRADIENT);
+            Material grad_mat{Vec3(1, 1, 1), 0, Vec3(0, 1, 1), 0, true, grad};
+
+            Triangle t1(Vertex{Vec3(0.1, 0, 1.7), Vec2(0, 0)}, Vertex{Vec3(0.6, 0.5, 1.9), Vec2(0, 1)}, Vertex{Vec3(0.8, 0.4, 2), Vec2(1, 1)}, grad_mat);
+
+            triangles.push_back(t1);
         }
 
         void create_cornell_box(Vec3 tl_near_pos, float width, float height, float depth, float light_width) {
@@ -255,9 +267,9 @@ class RenderSettings {
 
             antialias = true;
 
-            sky_colour.x = 0;
-            sky_colour.y = 0;
-            sky_colour.z = 0;
+            sky_colour.x = 0.9;
+            sky_colour.y = 0.9;
+            sky_colour.z = 0.9;
         }
 
         RenderData create_gpu_struct(int num_spheres) {

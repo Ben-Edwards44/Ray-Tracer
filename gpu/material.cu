@@ -30,7 +30,10 @@ __host__ __device__ class Texture {
             allocate_memory(rgb_values);
         }
 
-        __device__ Vec3 get_texture_colour(float u, float v) {
+        __device__ Vec3 get_texture_colour(Vec2 uv_coord) {
+            float u = uv_coord.x;
+            float v = uv_coord.y;
+
             if (type == GRADIENT) {
                 return gradient(u, v);
             } else if (type == CHECKERBOARD) {

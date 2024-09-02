@@ -1,5 +1,5 @@
-#include <cmath>
 #include "ray.cu"
+#include <cmath>
 
 
 const int INF = 1 << 31 - 1;
@@ -14,6 +14,12 @@ struct Plane {
     float b;
     float c;
     float d;
+};
+
+
+struct Vertex {
+    Vec3 world_point;
+    Vec2 texture_point;
 };
 
 
@@ -86,8 +92,7 @@ __host__ __device__ class Sphere {
 
             float v = 1 * behind + mult * v_ratio;  //branchless method of making v loop 0 -> 0.5 when in front, then 0.5 -> 1 when behind
 
-            hit_data->u = u;
-            hit_data->v = v;
+            hit_data->texture_uv = Vec2(u, v);
         }
 };
 
@@ -103,6 +108,21 @@ __host__ __device__ class Triangle {
             points[0] = point1;
             points[1] = point2;
             points[2] = point3;
+
+            material = mat;
+
+            precompute();
+        }
+
+        __host__ Triangle(Vertex point1, Vertex point2, Vertex point3, Material mat) {
+            texture_points[0] = point1.texture_point;
+            texture_points[1] = point2.texture_point;
+            texture_points[2] = point3.texture_point;
+
+            //in c++, you cannot call the constructor directly (why??) so we just need to CTRL-C CTRL-V the code
+            points[0] = point1.world_point;
+            points[1] = point2.world_point;
+            points[2] = point3.world_point;
 
             material = mat;
 
@@ -145,6 +165,8 @@ __host__ __device__ class Triangle {
                     if (normal.dot(ray->direction) > 0) {normal *= -1;}  //normal should point in same direction as the ray
 
                     hit_data.normal_vec = normal;
+
+                    if (material.using_texture) {assign_texture_coords(&hit_data);}
                 }
             }
 
@@ -161,6 +183,9 @@ __host__ __device__ class Triangle {
             Plane plane;
 
             Vec3 points[3];
+            Vec2 texture_points[3];
+
+            float area;
 
             __host__ void precompute() {
                 //precompute the plane the mesh lies on and (one of) its normal vectors. https://math.stackexchange.com/questions/2686606/equation-of-a-plane-passing-through-3-points
@@ -171,6 +196,8 @@ __host__ __device__ class Triangle {
 
                 plane = {normal_vec.x, normal_vec.y, normal_vec.z};
                 plane.d = -(plane.a * points[0].x + plane.b * points[0].y + plane.c * points[0].z);  //sub in a point to find constant
+
+                area = 0.5 * side1.cross(side2).magnitude();
             }
 
             __device__ float get_ray_travelled_dist(Ray *ray) {
@@ -179,6 +206,29 @@ __host__ __device__ class Triangle {
                 float denominator = plane.a * ray->direction.x + plane.b * ray->direction.y + plane.c * ray->direction.z;
 
                 return -numerator / denominator;
+            }
+
+            __device__ Vec3 get_baycentric_coords(Vec3 hit_point) {
+                //get the baycentric coords of the point in the triangle (https://www.scratchapixel.com/lessons/3d-basic-rendering/ray-tracing-rendering-a-triangle/barycentric-coordinates.html)
+                Vec3 ab = points[1] - points[0];
+                Vec3 ac = points[2] - points[0];
+                Vec3 bc = points[2] - points[1];
+                
+                Vec3 ap = hit_point - points[0];
+                Vec3 bp = hit_point - points[1];
+                
+                float area_u = 0.5 * ab.cross(ap).magnitude();
+                float area_v = 0.5 * ac.cross(ap).magnitude();
+                float area_w = 0.5 * bc.cross(bp).magnitude();
+
+                return Vec3(area_u / area, area_v / area, area_w / area);
+            }
+
+            __device__ void assign_texture_coords(RayHitData *hit_data) {
+                Vec3 b_coords = get_baycentric_coords(hit_data->hit_point);
+
+                //linearlly interpolate the (u, v) texture points of each vertex
+                hit_data->texture_uv = texture_points[0] * b_coords.x + texture_points[1] * b_coords.y + texture_points[2] * b_coords.z;
             }
 };
 
@@ -247,8 +297,8 @@ __host__ __device__ class Quad {
             Vec3 u_comp = point_vec * sin(theta);
             Vec3 v_comp = point_vec * cos(theta);
 
-            hit_data->u = u_comp.magnitude() / up_vec.magnitude();
-            hit_data->v = v_comp.magnitude() / right_vec.magnitude();
+            hit_data->texture_uv.x = u_comp.magnitude() / up_vec.magnitude();
+            hit_data->texture_uv.y = v_comp.magnitude() / right_vec.magnitude();
         }
 };
 

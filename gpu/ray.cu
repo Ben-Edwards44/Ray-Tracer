@@ -28,8 +28,7 @@ __device__ struct RayHitData {
     Vec3 hit_point;
     Vec3 normal_vec;
 
-    float u;
-    float v;
+    Vec2 texture_uv;
 };
 
 

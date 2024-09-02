@@ -101,7 +101,7 @@ __device__ Vec3 trace_ray(Ray ray) {
         final_colour += mat_emitted_light * current_ray_colour;
 
         if (material.using_texture) {
-            current_ray_colour *= material.texture.get_texture_colour(collision.hit_data.u, collision.hit_data.v);
+            current_ray_colour *= material.texture.get_texture_colour(collision.hit_data.texture_uv);
         } else {
             current_ray_colour *= material.colour;
         }
