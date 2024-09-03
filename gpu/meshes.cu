@@ -64,7 +64,7 @@ __host__ __device__ class Sphere {
                     hit_data.hit_point = hit_point;
                     hit_data.normal_vec = (hit_point - center).normalised();  //vector pointing from center to point of intersection
 
-                    if (material.using_texture) {assign_texture_coords(&hit_data);}
+                    if (material.need_uv) {assign_texture_coords(&hit_data);}
                 }
             }
 
@@ -166,7 +166,7 @@ __host__ __device__ class Triangle {
 
                     hit_data.normal_vec = normal;
 
-                    if (material.using_texture) {assign_texture_coords(&hit_data);}
+                    if (material.need_uv) {assign_texture_coords(&hit_data);}
                 }
             }
 
@@ -262,7 +262,7 @@ __host__ __device__ class Quad {
                 hit_data = t2_hit;
             }
 
-            if (material.using_texture) {assign_texture_coords(&hit_data);}
+            if (material.need_uv) {assign_texture_coords(&hit_data);}
 
             return hit_data;
         }

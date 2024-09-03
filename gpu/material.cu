@@ -5,9 +5,10 @@
 __host__ __device__ class Texture {
     //ideally, I would use inheritance and polymorphism. But virtual functions are weird with CUDA, so I'll just use one big class
     public:
-        static const int GRADIENT = 0;
-        static const int CHECKERBOARD = 1;
-        static const int IMAGE = 2;
+        static const int COLOUR = 0;
+        static const int GRADIENT = 1;
+        static const int CHECKERBOARD = 2;
+        static const int IMAGE = 3;
 
         int type;
 
@@ -17,35 +18,65 @@ __host__ __device__ class Texture {
             type = texture_type;
         }
 
-        __host__ void assign_checkerboard(Vec3 light_colour, Vec3 dark_colour, int num_sq) {
-            light = light_colour;
-            dark = dark_colour;
-            num_squares = num_sq;
+        //initialisers for each texture type
+        __host__ static Texture create_const_colour(Vec3 texture_colour) {
+            Texture tex(COLOUR);
+            tex.colour = texture_colour;
+
+            return tex;
         }
 
-        __host__ void assign_image(int width, int height, std::vector<Vec3> rgb_values) {
-            img_tex_width = width;
-            img_tex_height = height;
+        __host__ static Texture create_gradient() {
+            return Texture(GRADIENT);
+        }
 
-            allocate_memory(rgb_values);
+        __host__ static Texture create_checkerboard(Vec3 light_colour, Vec3 dark_colour, int num_sq) {
+            Texture tex(CHECKERBOARD);
+
+            tex.light = light_colour;
+            tex.dark = dark_colour;
+            tex.num_squares = num_sq;
+
+            return tex;
+        }
+
+        __host__ static Texture create_image(int width, int height, std::vector<Vec3> rgb_values) {
+            Texture tex(IMAGE);
+
+            tex.img_tex_width = width;
+            tex.img_tex_height = height;
+
+            tex.allocate_memory(rgb_values);
+
+            return tex;
         }
 
         __device__ Vec3 get_texture_colour(Vec2 uv_coord) {
             float u = uv_coord.x;
             float v = uv_coord.y;
 
-            if (type == GRADIENT) {
-                return gradient(u, v);
-            } else if (type == CHECKERBOARD) {
-                return checkerboard(u, v);
-            } else if (type == IMAGE) {
-                return image(u, v);
-            } else {
-                return Vec3(0, 0, 0);
+            switch (type) {
+                case COLOUR:
+                    return constant_colour();
+                case GRADIENT:
+                    return gradient(u, v);
+                case CHECKERBOARD:
+                    return checkerboard(u, v);
+                case IMAGE:
+                    return image(u, v);
+                default:
+                    return Vec3(0, 0, 0);
             }
         }
 
     private:
+        //constant colour
+        Vec3 colour;
+
+        __device__ Vec3 constant_colour() {
+            return colour;
+        }
+
         //graident
         __device__ Vec3 gradient(float u, float v) {
             return Vec3(u, v, 0);
@@ -95,15 +126,34 @@ __host__ __device__ class Texture {
 };
 
 
-__host__ __device__ struct Material {
-    Vec3 colour;
+__host__ __device__ class Material {
+    public:
+        Texture texture;
 
-    float emission_strength;
-    Vec3 emission_colour;
+        float smoothness;  //[0, 1]. 0 = perfect diffuse, 1 = perfect reflect
 
-    float smoothness;  //[0, 1]. 0 = perfect diffuse, 1 = perfect reflect
+        Vec3 emitted_light;
 
-    bool using_texture;
+        bool need_uv;  //can optimise by not calculating uv coords if not needed
 
-    Texture texture;
+        __host__ __device__ Material() {}
+
+        __host__ Material(Texture mat_tex, float smoothness_val) {
+            texture = mat_tex;
+            smoothness = smoothness_val;
+
+            emitted_light = Vec3(0, 0, 0);
+
+            need_uv = texture.type != Texture::COLOUR;
+
+        }
+
+        __host__ Material(Texture mat_tex, float smoothness_val, float emit_strength, Vec3 emit_colour) {
+            //constructor for emissive texture
+            texture = mat_tex;
+            smoothness = smoothness_val;
+            emitted_light = emit_colour * emit_strength;
+
+            need_uv = texture.type != Texture::COLOUR;
+        }
 };

@@ -67,11 +67,7 @@ class ImageTexture {
         }
 
         Texture get_device_texture() {
-            Texture t(Texture::IMAGE);
-
-            t.assign_image(width, height, rgb_values);
-
-            return t;
+            return Texture::create_image(width, height, rgb_values);
         }
 
     private:
@@ -157,7 +153,8 @@ class Meshes {
             //setup simple test scene with a cornell box, suzanne mesh and sphere
             create_cornell_box(Vec3(-0.5, 0.5, 1.2), 1, 1, 1, 0.5);
 
-            Material monkey_mat{Vec3(1, 1, 1), 0, Vec3(0, 0, 0), 0, false};
+            Texture monkey_tex = Texture::create_const_colour(Vec3(1, 1, 1));
+            Material monkey_mat(monkey_tex, 0);
 
             Object m("low_poly_monkey.obj");
             m.enlarge(0.3);
@@ -166,7 +163,8 @@ class Meshes {
 
             add_obj_faces(m, monkey_mat);
 
-            Material sphere_mat{Vec3(0.8, 0.8, 0.8), 0, Vec3(0, 0, 0), 1, false};
+            Texture sphere_tex = Texture::create_const_colour(Vec3(0.8, 0.8, 0.8));
+            Material sphere_mat(sphere_tex, 1);
             Sphere sphere(Vec3(-0.25, -0.25, 1.95), 0.25, sphere_mat);
 
             spheres.push_back(sphere);
@@ -176,13 +174,12 @@ class Meshes {
             //simple test scene with spheres of different smoothness values
             create_cornell_box(Vec3(-0.5, 0.5, 1.2), 1, 1, 1, 0.5);
 
-            Texture t(Texture::GRADIENT);
-            t.assign_checkerboard(Vec3(0, 1, 0), Vec3(0, 0.5, 0), 8);
+            Texture sphere_tex = Texture::create_const_colour(Vec3(1, 1, 1));
 
-            Material a{Vec3(1, 1, 1), 0, Vec3(0, 0, 0), 0, true, t};
-            Material b{Vec3(1, 1, 1), 0, Vec3(0, 0, 0), 0.4, false};
-            Material c{Vec3(1, 1, 1), 0, Vec3(0, 0, 0), 0.8, false};
-            Material d{Vec3(1, 1, 1), 0, Vec3(0, 0, 0), 1, false};
+            Material a(sphere_tex, 0);
+            Material b(sphere_tex, 0.33);
+            Material c(sphere_tex, 0.66);
+            Material d(sphere_tex, 1);
 
             spheres.push_back(Sphere(Vec3(-0.2, 0.2, 1.7), 0.15, a));
             spheres.push_back(Sphere(Vec3(0.2, 0.2, 1.7), 0.15, b));
@@ -195,12 +192,12 @@ class Meshes {
             create_cornell_box(Vec3(-0.5, 0.5, 1.2), 1, 1, 1, 0.5);
 
             ImageTexture earth("earth.png");
-            Material earth_mat{Vec3(0, 1, 0), 0, Vec3(0, 0, 0), 0, true, earth.get_device_texture()};
+            Material earth_mat(earth.get_device_texture(), 0);
 
-            //spheres.push_back(Sphere(Vec3(0, 0, 1.7), 0.25, earth_mat));
+            spheres.push_back(Sphere(Vec3(0, 0, 1.7), 0.25, earth_mat));
 
-            Texture grad(Texture::GRADIENT);
-            Material grad_mat{Vec3(1, 1, 1), 0, Vec3(0, 1, 1), 0, true, grad};
+            Texture grad_tex = Texture::create_gradient();
+            Material grad_mat(grad_tex, 0);
 
             Triangle t1(Vertex{Vec3(0.1, 0, 1.7), Vec2(0, 0)}, Vertex{Vec3(0.6, 0.5, 1.9), Vec2(0, 1)}, Vertex{Vec3(0.8, 0.4, 2), Vec2(1, 1)}, grad_mat);
 
@@ -208,15 +205,19 @@ class Meshes {
         }
 
         void create_cornell_box(Vec3 tl_near_pos, float width, float height, float depth, float light_width) {
-            Texture floor_tex(Texture::CHECKERBOARD);
-            floor_tex.assign_checkerboard(Vec3(0.1, 0.8, 0.1), Vec3(0.1, 0.5, 0.1), 8);
+            Texture floor_tex = Texture::create_checkerboard(Vec3(0.1, 0.8, 0.1), Vec3(0.1, 0.5, 0.1), 8);
+            Texture l_wall_tex = Texture::create_const_colour(Vec3(1, 0.2, 0.2));
+            Texture r_wall_tex = Texture::create_const_colour(Vec3(0.3, 0.3, 1));
+            Texture back_tex = Texture::create_const_colour(Vec3(0.2, 0.2, 0.2));
+            Texture roof_tex = Texture::create_const_colour(Vec3(0.9, 0.9, 0.9));
+            Texture front_tex = Texture::create_const_colour(Vec3(1, 1, 1));
 
-            Material floor{Vec3(0.1, 0.8, 0.1), 0, Vec3(0, 0, 0), 0, true, floor_tex};
-            Material l_wall{Vec3(1, 0.2, 0.2), 0, Vec3(0, 0, 0), 0, false};
-            Material r_wall{Vec3(0.3, 0.3, 1), 0, Vec3(0, 0, 0), 0, false};
-            Material back{Vec3(0.2, 0.2, 0.2), 0, Vec3(0, 0, 0), 0, false};
-            Material roof{Vec3(0.9, 0.9, 0.9), 0, Vec3(0, 0, 0), 0, false};
-            Material front{Vec3(1, 1, 1), 0, Vec3(0, 0, 0), 0, false};
+            Material floor(floor_tex, 0);
+            Material l_wall(l_wall_tex, 0);
+            Material r_wall(r_wall_tex, 0);
+            Material back(back_tex, 0);
+            Material roof(roof_tex, 0);
+            Material front(front_tex, 0);
 
             //offset vectors
             Vec3 w(width, 0, 0);
@@ -231,7 +232,8 @@ class Meshes {
             one_way_quads.push_back(OneWayQuad(tl_near_pos, tl_near_pos + w, tl_near_pos + w - h, tl_near_pos - h, front, false));  //front wall is one way so we can see through it
 
             //add the light
-            Material light_mat{Vec3(0, 0, 0), 6, Vec3(1, 1, 1), 0, false};
+            Texture light_tex = Texture::create_const_colour(Vec3(0, 0, 0));
+            Material light_mat(light_tex, 0, 6, Vec3(1, 1, 1));
 
             Vec3 light_tl_near_pos(tl_near_pos.x + width / 2 - light_width / 2, tl_near_pos.y, tl_near_pos.z + depth / 2 - light_width / 2);  //ensure light is in center of roof
             Cuboid light(light_tl_near_pos, light_width, 0.04, light_width, light_mat);
@@ -267,9 +269,9 @@ class RenderSettings {
 
             antialias = true;
 
-            sky_colour.x = 0.9;
-            sky_colour.y = 0.9;
-            sky_colour.z = 0.9;
+            sky_colour.x = 0;
+            sky_colour.y = 0;
+            sky_colour.z = 0;
         }
 
         RenderData create_gpu_struct(int num_spheres) {
@@ -280,7 +282,7 @@ class RenderSettings {
 
 Scene create_scene(int img_width, int img_height) {
     Camera cam;
-    Meshes meshes(2);
+    Meshes meshes(1);
     RenderSettings render_settings(meshes.spheres.size());
 
     int len_pixel_array = img_width * img_height * 3;
