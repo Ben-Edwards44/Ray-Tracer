@@ -8,10 +8,6 @@
 #include <SFML/Graphics.hpp>
 
 
-
-#include <iostream>
-
-
 const int WIDTH = 1000;
 const int HEIGHT = 800;
 const float ASPECT = static_cast<float>(WIDTH) / static_cast<float>(HEIGHT);  //static cast is used to stop integer division
