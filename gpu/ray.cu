@@ -109,8 +109,8 @@ __device__ class Ray {
                 return;
             }
 
+            //use the vector geometry explained here: https://www.scratchapixel.com/lessons/3d-basic-rendering/introduction-to-shading/reflection-refraction-fresnel.html
             Vec3 perp_component = (direction - reference_normal * cos(theta1)) / sin(theta1);
-
             Vec3 resultant_refract = reference_normal * cos(theta2) + perp_component * sin(theta2);
 
             direction = resultant_refract.normalised();
