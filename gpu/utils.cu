@@ -165,22 +165,6 @@ class Vec2 {
         __device__ Vec2 operator*(float scalar) {
             return Vec2(x * scalar, y * scalar);
         }
-
-        __device__ Vec2* operator*=(float scalar) {
-            x *= scalar;
-            y *= scalar;
-            
-            return this;
-        }
-
-        __device__ float dot(Vec2 other_vec) {
-            return x * other_vec.x + y * other_vec.y;
-        }
-
-        __device__ float magnitude() {
-            float mag_sq = x * x + y * y;
-            return sqrt(mag_sq);
-        }
 };
 
 
