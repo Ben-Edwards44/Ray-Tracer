@@ -131,10 +131,12 @@ __host__ __device__ class Material {
         Texture texture;
 
         float smoothness;  //[0, 1]. 0 = perfect diffuse, 1 = perfect reflect
+        float refractive_index;
 
         Vec3 emitted_light;
 
         bool need_uv;  //can optimise by not calculating uv coords if not needed
+        bool is_glass = false;
 
         __host__ __device__ Material() {}
 
@@ -145,7 +147,6 @@ __host__ __device__ class Material {
             emitted_light = Vec3(0, 0, 0);
 
             need_uv = texture.type != Texture::COLOUR;
-
         }
 
         __host__ Material(Texture mat_tex, float smoothness_val, float emit_strength, Vec3 emit_colour) {

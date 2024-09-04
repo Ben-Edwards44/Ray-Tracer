@@ -57,6 +57,8 @@ __device__ class Ray {
 
             antialias = should_antialias;
 
+            current_refractive_index = 1;  //air
+
             set_direction_origin();
         }
 
@@ -70,6 +72,48 @@ __device__ class Ray {
             Vec3 specular_dir = perfect_reflect(hit_data);
 
             direction = lerp(diffuse_dir, specular_dir, obj_material.smoothness);
+            origin = hit_data->hit_point;
+        }
+
+        __device__ void refract(RayHitData *hit_data, Material obj_material) {
+            //refract the ray after hitting a glass material
+            float n1;
+            float n2;
+
+            Vec3 reference_normal;  //normal in same direction as ray
+
+            if (hit_data->normal_vec.dot(direction) > 0) {
+                //moving outside the object
+                n1 = obj_material.refractive_index;
+                n2 = current_refractive_index;
+
+                reference_normal = hit_data->normal_vec;
+            } else {
+                //moving inside the object
+                n1 = current_refractive_index;
+                n2 = obj_material.refractive_index;
+
+                reference_normal = hit_data->normal_vec * -1;
+            }
+
+            current_refractive_index = n2;
+
+            //snell's law (https://en.wikipedia.org/wiki/Snell%27s_law)
+            float theta1 = acos(direction.dot(reference_normal * -1));
+            float theta2 = asin(n1 * sin(theta1) / n2);
+
+            float ciritical_angle = asin(n2 / n1);
+            if (theta1 > ciritical_angle) {
+                //total internal reflection occurs (so no refraction)
+                reflect(hit_data, obj_material);
+                return;
+            }
+
+            Vec3 perp_component = (direction - reference_normal * cos(theta1)) / sin(theta1);
+
+            Vec3 resultant_refract = reference_normal * cos(theta2) + perp_component * sin(theta2);
+
+            direction = resultant_refract.normalised();
             origin = hit_data->hit_point;
         }
 
@@ -87,6 +131,8 @@ __device__ class Ray {
         }
     
     private:
+        float current_refractive_index;
+
         __device__ Vec3 screen_to_world(int x, int y) {
             //convert a point (x, y) on the viewport projection plane into a world space coordinate
             Vec3 local_pos;

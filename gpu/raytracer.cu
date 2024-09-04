@@ -93,7 +93,11 @@ __device__ Vec3 trace_ray(Ray ray) {
             break;
         }
 
-        ray.reflect(&collision.hit_data, collision.hit_mesh_material);
+        if (collision.hit_mesh_material.is_glass) {
+            ray.refract(&collision.hit_data, collision.hit_mesh_material);
+        } else {
+            ray.reflect(&collision.hit_data, collision.hit_mesh_material);
+        }
 
         Material material = collision.hit_mesh_material;
 

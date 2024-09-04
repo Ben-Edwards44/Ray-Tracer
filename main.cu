@@ -8,6 +8,8 @@
 #include <SFML/Graphics.hpp>
 
 
+const int SCENE_NUM = 3;
+
 const int WIDTH = 1000;
 const int HEIGHT = 800;
 const float ASPECT = static_cast<float>(WIDTH) / static_cast<float>(HEIGHT);  //static cast is used to stop integer division
@@ -81,9 +83,12 @@ class ImageTexture {
                     height = std::stoi(lines[i + 2]);
                     rgb_values = parse_rgb_values(lines[i + 3]);
 
-                    break;
+                    return;
                 }
             }
+
+            //if we have not yet returned from the function, the file was not found
+            throw std::runtime_error("Image file not found.\n");
         }
 
         std::vector<Vec3> parse_rgb_values(std::string rgb_string) {
@@ -124,8 +129,11 @@ class Meshes {
                 case 2:
                     texture_test_scene();
                     break;
+                case 3:
+                    refract_test_scene();
+                    break;
                 default:
-                    throw std::domain_error("Test scene must be number between 0 and 2 (inclusive).\n");
+                    throw std::domain_error("Test scene must be number between 0 and 3 (inclusive).\n");
             }
         }
 
@@ -192,12 +200,32 @@ class Meshes {
 
             spheres.push_back(Sphere(Vec3(0, 0, 1.7), 0.25, earth_mat));
 
-            Texture grad_tex = Texture::create_gradient();
-            Material grad_mat(grad_tex, 0);
+            Texture tri_tex = Texture::create_checkerboard(Vec3(1, 1, 1), Vec3(0, 0, 0), 4);
+            Material tri_mat(tri_tex, 0);
 
-            Triangle t1(Vertex{Vec3(0.1, 0, 1.7), Vec2(0, 0)}, Vertex{Vec3(0.6, 0.5, 1.9), Vec2(0, 1)}, Vertex{Vec3(0.8, 0.4, 2), Vec2(1, 1)}, grad_mat);
+            Triangle t1(Vertex{Vec3(0.1, 0, 1.7), Vec2(0, 0)}, Vertex{Vec3(0.6, 0.5, 1.9), Vec2(0, 1)}, Vertex{Vec3(0.8, 0.4, 2), Vec2(1, 1)}, tri_mat);
 
             triangles.push_back(t1);
+        }
+
+        void refract_test_scene() {
+            Texture t = Texture::create_const_colour(Vec3(1, 1, 1));
+            Material no(t, 0);
+            Material yes(t, 0);
+            yes.is_glass = true;
+            yes.refractive_index = 1.5;
+
+            spheres.push_back(Sphere(Vec3(-0.4, -0.1, 3), 0.3, yes));
+            //spheres.push_back(Sphere(Vec3(0.4, -0.1, 3), 0.3, no));
+
+            Texture t2 = Texture::create_checkerboard(Vec3(0.1, 1, 0.1), Vec3(0.1, 0.5, 0.1), 8);
+            Material fl(t2, 0);
+
+            Texture t3 = Texture::create_const_colour(Vec3(1, 0.2, 0.2));
+            Material b(t3, 0);
+
+            quads.push_back(Quad(Vec3(-2, -0.5, 0), Vec3(2, -0.5, 0), Vec3(2, -0.5, 5), Vec3(-2, -0.5, 5), fl));
+            quads.push_back(Quad(Vec3(-2, -0.5, 5), Vec3(2, -0.5, 5), Vec3(2, 2, 5), Vec3(-2, 2, 5), b));
         }
 
         void create_cornell_box(Vec3 tl_near_pos, float width, float height, float depth, float light_width) {
@@ -265,9 +293,9 @@ class RenderSettings {
 
             antialias = true;
 
-            sky_colour.x = 0;
-            sky_colour.y = 0;
-            sky_colour.z = 0;
+            sky_colour.x = 0.7;
+            sky_colour.y = 0.7;
+            sky_colour.z = 0.98;
         }
 
         RenderData create_gpu_struct(int num_spheres) {
@@ -278,7 +306,7 @@ class RenderSettings {
 
 Scene create_scene(int img_width, int img_height) {
     Camera cam;
-    Meshes meshes(1);
+    Meshes meshes(SCENE_NUM);
     RenderSettings render_settings(meshes.spheres.size());
 
     int len_pixel_array = img_width * img_height * 3;
