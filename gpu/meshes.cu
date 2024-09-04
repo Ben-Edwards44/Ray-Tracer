@@ -262,8 +262,6 @@ __host__ __device__ class Quad {
                 hit_data = t2_hit;
             }
 
-            if (material.need_uv) {assign_texture_coords(&hit_data);}
-
             return hit_data;
         }
 
@@ -278,27 +276,13 @@ __host__ __device__ class Quad {
 
         __host__ void create_triangles() {
             //a quad is just 2 triangles
-            t1 = Triangle(point1, point2, point3, material);
-            t2 = Triangle(point1, point4, point3, material);
-        }
+            Vertex v1{point1, Vec2(0, 0)};
+            Vertex v2{point2, Vec2(1, 0)};
+            Vertex v3{point3, Vec2(1, 1)};
+            Vertex v4{point4, Vec2(0, 1)};
 
-        __device__ void assign_texture_coords(RayHitData *hit_data) {
-            //add the (u, v) texture coords to hit data
-            //TODO: make this work for non parallelogram quads
-
-            //assuming points are ordered: BL, BR, TR, TL
-            Vec3 origin = point1;
-            Vec3 up_vec = point4 - point1;
-            Vec3 right_vec = point2 - point1;
-            Vec3 point_vec = hit_data->hit_point - origin;
-
-            //split point_vec into component parts
-            float theta = acos(point_vec.dot(right_vec) / (point_vec.magnitude() * right_vec.magnitude()));
-            Vec3 u_comp = point_vec * sin(theta);
-            Vec3 v_comp = point_vec * cos(theta);
-
-            hit_data->texture_uv.x = u_comp.magnitude() / up_vec.magnitude();
-            hit_data->texture_uv.y = v_comp.magnitude() / right_vec.magnitude();
+            t1 = Triangle(v1, v2, v3, material);
+            t2 = Triangle(v1, v4, v3, material);
         }
 };
 
