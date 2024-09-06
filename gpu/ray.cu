@@ -99,12 +99,15 @@ __device__ class Ray {
             current_refractive_index = n2;
 
             //snell's law (https://en.wikipedia.org/wiki/Snell%27s_law)
-            float theta1 = acos(direction.dot(reference_normal * -1));
+            float theta1 = acos(direction.dot(reference_normal));
             float theta2 = asin(n1 * sin(theta1) / n2);
 
             float ciritical_angle = asin(n2 / n1);
-            if (theta1 > ciritical_angle) {
-                //total internal reflection occurs (so no refraction)
+
+            float reflection_coeff = get_reflection_coeff(theta1, n1, n2);
+
+            if (theta1 > ciritical_angle || reflection_coeff > pseudorandom_num(rng_state)) {
+                //total internal reflection occurs or we are have a high reflectivity
                 reflect(hit_data, obj_material);
                 return;
             }
@@ -182,5 +185,15 @@ __device__ class Ray {
             Vec3 reflected_vec = direction - hit_data->normal_vec * 2 * dot;
 
             return reflected_vec.normalised();
+        }
+
+        __device__ float get_reflection_coeff(float theta1, float n1, float n2) {
+            //at grazing angles, refractive substances reflect more. Use the Schlick approximation (https://en.wikipedia.org/wiki/Schlick%27s_approximation) to calculate how reflective we should be
+            float sqrt_r0 = (n1 - n2) / (n1 + n2);
+            float r0 = sqrt_r0 * sqrt_r0;
+
+            float cos_theta = cos(theta1);  //TODO: we already did arccos(theta1) previously, so could save time
+
+            return r0 + (1 - r0) * pow((1 - cos_theta), 5);  //in range [0, 1]
         }
 };

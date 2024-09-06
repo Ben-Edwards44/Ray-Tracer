@@ -211,7 +211,7 @@ class Meshes {
         void refract_test_scene() {
             Texture t = Texture::create_const_colour(Vec3(1, 1, 1));
             Material no = Material::create_standard(t, 0);
-            Material yes = Material::create_refractive(t, 1.8, 0.8);
+            Material yes = Material::create_refractive(t, 1.8);
 
             spheres.push_back(Sphere(Vec3(-0.4, -0.1, 3), 0.3, yes));
             spheres.push_back(Sphere(Vec3(0.4, -0.1, 3), 0.3, no));

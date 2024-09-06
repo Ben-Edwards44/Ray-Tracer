@@ -90,12 +90,8 @@ __device__ void update_ray(Ray *ray, RayHitData *hit_data, Material material) {
             break;
         
         case Material::REFRACTIVE:
-            //sometimes reflect, sometimes refract
-            if (pseudorandom_num(ray->rng_state) < material.refraction_threshold) {
-                ray->refract(hit_data, material);
-            } else {
-                ray->reflect(hit_data, material);
-            }
+            ray->refract(hit_data, material);
+            break;
     };
 }
 

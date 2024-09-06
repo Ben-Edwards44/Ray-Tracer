@@ -147,7 +147,6 @@ __host__ __device__ class Material {
 
         //refractive
         float refractive_index;
-        float refraction_threshold;
 
         __host__ __device__ Material() {}
 
@@ -174,12 +173,11 @@ __host__ __device__ class Material {
             return mat;
         }
 
-        __host__ static Material create_refractive(Texture mat_tex, float n, float refract_threshold) {
+        __host__ static Material create_refractive(Texture mat_tex, float n) {
             Material mat(REFRACTIVE);
 
             mat.texture = mat_tex;
             mat.refractive_index = n;
-            mat.refraction_threshold = refract_threshold;
             mat.need_uv = mat_tex.type != Texture::COLOUR;
 
             return mat;
