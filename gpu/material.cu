@@ -128,33 +128,60 @@ __host__ __device__ class Texture {
 
 __host__ __device__ class Material {
     public:
+        //types
+        static const int STANDARD = 0;
+        static const int EMISSIVE = 1;
+        static const int REFRACTIVE = 2;
+
+        int type;
+
+        //standard
         Texture texture;
 
         float smoothness;  //[0, 1]. 0 = perfect diffuse, 1 = perfect reflect
-        float refractive_index;
-
-        Vec3 emitted_light;
 
         bool need_uv;  //can optimise by not calculating uv coords if not needed
-        bool is_glass = false;
+
+        //emissive
+        Vec3 emitted_light;
+
+        //refractive
+        float refractive_index;
+        float refraction_threshold;
 
         __host__ __device__ Material() {}
 
-        __host__ Material(Texture mat_tex, float smoothness_val) {
-            texture = mat_tex;
-            smoothness = smoothness_val;
-
-            emitted_light = Vec3(0, 0, 0);
-
-            need_uv = texture.type != Texture::COLOUR;
+        __host__ Material(int mat_type) {
+            type = mat_type;
         }
 
-        __host__ Material(Texture mat_tex, float smoothness_val, float emit_strength, Vec3 emit_colour) {
-            //constructor for emissive texture
-            texture = mat_tex;
-            smoothness = smoothness_val;
-            emitted_light = emit_colour * emit_strength;
+        //initialisers for each type
+        __host__ static Material create_standard(Texture mat_tex, float smoothness_val) {
+            Material mat(STANDARD);
 
-            need_uv = texture.type != Texture::COLOUR;
+            mat.texture = mat_tex;
+            mat.smoothness = smoothness_val;
+            mat.need_uv = mat_tex.type != Texture::COLOUR;
+
+            return mat;
+        }
+
+        __host__ static Material create_emissive(Vec3 emit_colour, float emit_strength) {
+            Material mat(EMISSIVE);
+
+            mat.emitted_light = emit_colour * emit_strength;
+
+            return mat;
+        }
+
+        __host__ static Material create_refractive(Texture mat_tex, float n, float refract_threshold) {
+            Material mat(REFRACTIVE);
+
+            mat.texture = mat_tex;
+            mat.refractive_index = n;
+            mat.refraction_threshold = refract_threshold;
+            mat.need_uv = mat_tex.type != Texture::COLOUR;
+
+            return mat;
         }
 };

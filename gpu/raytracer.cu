@@ -78,6 +78,28 @@ __device__ RayCollision get_ray_collision(Ray *ray) {
 }
 
 
+__device__ void update_ray(Ray *ray, RayHitData *hit_data, Material material) {
+    //reflect or refract ray depending on the hit material type
+    switch (material.type) {
+        case Material::STANDARD:
+            ray->reflect(hit_data, material);
+            break;
+        
+        case Material::EMISSIVE:
+            ray->reflect(hit_data, material);
+            break;
+        
+        case Material::REFRACTIVE:
+            //sometimes reflect, sometimes refract
+            if (pseudorandom_num(ray->rng_state) < material.refraction_threshold) {
+                ray->refract(hit_data, material);
+            } else {
+                ray->reflect(hit_data, material);
+            }
+    };
+}
+
+
 __device__ Vec3 trace_ray(Ray ray) {
     Vec3 final_colour(0, 0, 0);
     Vec3 current_ray_colour(1, 1, 1);
@@ -93,16 +115,15 @@ __device__ Vec3 trace_ray(Ray ray) {
             break;
         }
 
-        if (collision.hit_mesh_material.is_glass) {
-            ray.refract(&collision.hit_data, collision.hit_mesh_material);
-        } else {
-            ray.reflect(&collision.hit_data, collision.hit_mesh_material);
-        }
-
         Material material = collision.hit_mesh_material;
 
-        final_colour += material.emitted_light * current_ray_colour;
-        current_ray_colour *= material.texture.get_texture_colour(collision.hit_data.texture_uv);
+        update_ray(&ray, &collision.hit_data, material);
+
+        if (material.type == Material::EMISSIVE) {
+            final_colour += material.emitted_light * current_ray_colour;
+        } else {
+            current_ray_colour *= material.texture.get_texture_colour(collision.hit_data.texture_uv);
+        }
     }
 
     return final_colour;
