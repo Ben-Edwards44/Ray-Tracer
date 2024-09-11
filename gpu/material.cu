@@ -180,6 +180,8 @@ __host__ __device__ class Material {
             mat.refractive_index = n;
             mat.need_uv = mat_tex.type != Texture::COLOUR;
 
+            mat.smoothness = 1;
+
             return mat;
         }
 };

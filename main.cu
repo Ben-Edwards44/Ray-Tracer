@@ -209,21 +209,12 @@ class Meshes {
         }
 
         void refract_test_scene() {
-            Texture t = Texture::create_const_colour(Vec3(1, 1, 1));
-            Material no = Material::create_standard(t, 0);
-            Material yes = Material::create_refractive(t, 1.8);
+            create_cornell_box(Vec3(-0.5, 0.5, 1.2), 1, 1, 1, 0.5);
 
-            spheres.push_back(Sphere(Vec3(-0.4, -0.1, 3), 0.3, yes));
-            spheres.push_back(Sphere(Vec3(0.4, -0.1, 3), 0.3, no));
+            Texture refract_tex = Texture::create_const_colour(Vec3(1, 1, 1));
+            Material refract_mat = Material::create_refractive(refract_tex, 1.5);
 
-            Texture t2 = Texture::create_checkerboard(Vec3(0.1, 1, 0.1), Vec3(0.1, 0.5, 0.1), 8);
-            Material fl = Material::create_standard(t2, 0);
-
-            Texture t3 = Texture::create_const_colour(Vec3(1, 0.2, 0.2));
-            Material b = Material::create_standard(t3, 0);
-
-            quads.push_back(Quad(Vec3(-2, -0.5, 0), Vec3(2, -0.5, 0), Vec3(2, -0.5, 5), Vec3(-2, -0.5, 5), fl));
-            quads.push_back(Quad(Vec3(-2, -0.5, 5), Vec3(2, -0.5, 5), Vec3(2, 2, 5), Vec3(-2, 2, 5), b));
+            spheres.push_back(Sphere(Vec3(0, -0.1, 1.7), 0.3, refract_mat));
         }
 
         void create_cornell_box(Vec3 tl_near_pos, float width, float height, float depth, float light_width) {
@@ -286,13 +277,13 @@ class RenderSettings {
         void assign_default() {
             //these settings can be changed
             reflect_limit = 5;
-            rays_per_pixel = 10;
+            rays_per_pixel = 100;
 
             antialias = true;
 
-            sky_colour.x = 0.7;
-            sky_colour.y = 0.7;
-            sky_colour.z = 0.98;
+            sky_colour.x = 0;//0.7;
+            sky_colour.y = 0;//0.7;
+            sky_colour.z = 0;//0.98;
         }
 
         RenderData create_gpu_struct(int num_spheres) {
