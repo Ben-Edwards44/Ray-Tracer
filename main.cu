@@ -9,10 +9,7 @@
 
 
 const int SCENE_NUM = 0;
-
-const int WIDTH = 1000;
-const int HEIGHT = 800;
-const float ASPECT = static_cast<float>(WIDTH) / static_cast<float>(HEIGHT);  //static cast is used to stop integer division
+const float ASPECT = static_cast<float>(WIDTH) / static_cast<float>(HEIGHT);  //static cast is used to stop integer division. WIDTH and HEIGHT are defined in gpu/dispatch.cu
 
 const std::string CAPTION = "ray tracer";
 
@@ -112,7 +109,7 @@ class ImageTexture {
 
 class Meshes {
     public:
-        std::vector<Mesh> meshes;
+        AllMeshes gpu_struct;
 
         Meshes(int test_scene) {
             switch (test_scene) {
@@ -131,9 +128,13 @@ class Meshes {
                 default:
                     throw std::domain_error("Test scene must be number between 0 and 3 (inclusive).\n");
             }
+
+            gpu_struct = create_gpu_struct();
         }
 
     private:
+        std::vector<Mesh> meshes;
+
         void add_obj_faces(Object obj, Material mat) {
             //parse the object faces into triangles and add them to the list of triangles
             for (std::vector<float3> face : obj.faces) {
@@ -248,6 +249,13 @@ class Meshes {
 
             meshes.push_back(light);
         }
+
+        AllMeshes create_gpu_struct() {
+            int num_meshes = meshes.size();
+            ReadOnlyDeviceArray<Mesh> array(meshes);
+
+            return AllMeshes{array.device_pointer, num_meshes};
+        }
 };
 
 
@@ -258,7 +266,7 @@ class RenderSettings {
         RenderSettings() {
             assign_default();
 
-            gpu_struct = create_gpu_struct();
+            gpu_struct = RenderData{rays_per_pixel, reflect_limit, antialias, sky_colour};
         }
 
     private:
@@ -273,7 +281,7 @@ class RenderSettings {
         void assign_default() {
             //these settings can be changed
             reflect_limit = 5;
-            rays_per_pixel = 10;
+            rays_per_pixel = 100;
 
             antialias = true;
 
@@ -281,22 +289,7 @@ class RenderSettings {
             sky_colour.y = 0;
             sky_colour.z = 0;
         }
-
-        RenderData create_gpu_struct() {
-            return RenderData{rays_per_pixel, reflect_limit, antialias, sky_colour};
-        }
 };
-
-
-Scene create_scene(int img_width, int img_height) {
-    Camera cam;
-    Meshes meshes(SCENE_NUM);
-    RenderSettings render_settings;
-
-    int len_pixel_array = img_width * img_height * 3;
-
-    return Scene(cam.gpu_struct, render_settings.gpu_struct, meshes.meshes, len_pixel_array);
-}
 
 
 int get_time() {
@@ -309,12 +302,12 @@ int get_time() {
 }
 
 
-std::vector<float> get_pixel_colours(Scene *scene) {
+std::vector<float> get_pixel_colours(VariableRenderData *render_data) {
     //get the pixel colours from the raytracer
     int time = get_time();
-    render(scene, time);  //will update scene.previous_render
+    render(render_data, time);  //will update render_data.previous_render
 
-    return scene->previous_render;
+    return render_data->previous_render;
 }
 
 
@@ -364,11 +357,22 @@ void draw_screen(sf::RenderWindow *window, std::vector<float> pixel_colours) {
 }
 
 
+void init() {
+    Camera cam_data;
+    Meshes mesh_data(SCENE_NUM);
+    RenderSettings render_data;
+
+    allocate_constant_mem(cam_data.gpu_struct, render_data.gpu_struct, mesh_data.gpu_struct);
+}
+
+
 int main() {
+    init();
+
     sf::VideoMode dims(WIDTH, HEIGHT);
     sf::RenderWindow window(dims, CAPTION);
 
-    Scene scene = create_scene(WIDTH, HEIGHT);
+    VariableRenderData render_data{0, std::vector<float>(PIXEL_ARRAY_LEN, 0)};
 
     int start_time = get_time();
 
@@ -381,7 +385,7 @@ int main() {
             }
         }
 
-        std::vector<float> pixel_colours = get_pixel_colours(&scene);
+        std::vector<float> pixel_colours = get_pixel_colours(&render_data);
         draw_screen(&window, pixel_colours);
 
         int elapsed = get_time() - start_time;
