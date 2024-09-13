@@ -21,60 +21,28 @@ __device__ struct RayCollision {
 };
 
 
-template <typename T>
-__device__ RayCollision get_specific_mesh_collision(Ray *ray, T *meshes, int num_meshes) {
-    //get the closest collision with a specific mesh (e.g. sphere, triangle). NOTE: error occurs if there are no meshes
-    RayHitData hit_data;
-    Material hit_mesh_material;
+__device__ RayCollision get_ray_collision(Ray *ray) {
+    RayCollision best_collision;
 
-    //in the case where no collisions are found, the hit_data struct may have nonsense default values. So we set sensible ones here
-    hit_data.ray_hits = false;
-    hit_data.ray_travelled_dist = INF;
+    //in the case where no collisions are found, the hit_data struct may have nonsense default values. So set sensible ones here.
+    best_collision.hit_data.ray_hits = false;
+    best_collision.hit_data.ray_travelled_dist = INF;
 
-    for (int i = 0; i < num_meshes; i++) {
-        RayHitData current_hit = meshes[i].hit(ray);
+    for (int i = 0; i < const_meshes.num_meshes; i++) {
+        RayHitData current_hit_data = const_meshes.meshes[i].hit(ray);
 
-        if (!current_hit.ray_hits) {continue;}
+        if (!current_hit_data.ray_hits) {continue;}
 
-        bool closest_to_cam = current_hit.ray_travelled_dist <= hit_data.ray_travelled_dist;  //is this the closest to the camera so far?
-        bool precision_error = -FLOAT_PRECISION_ERROR < current_hit.ray_travelled_dist < FLOAT_PRECISION_ERROR;  //floating point errors can cause a reflected ray to intersect with the same object twice (its origin is put just inside the object)
+        bool closest_to_cam = current_hit_data.ray_travelled_dist <= best_collision.hit_data.ray_travelled_dist;  //is this the closest to the camera so far?
+        bool precision_error = -FLOAT_PRECISION_ERROR < current_hit_data.ray_travelled_dist < FLOAT_PRECISION_ERROR;  //floating point errors can cause a reflected ray to intersect with the same object twice (its origin is put just inside the object)
         
         if (closest_to_cam && !precision_error) {
-            hit_data = current_hit;
-            hit_mesh_material = meshes[i].material;
+            best_collision.hit_data = current_hit_data;
+            best_collision.hit_mesh_material = const_meshes.meshes[i].material;
         }
     }
 
-    return RayCollision{hit_data, hit_mesh_material};
-}
-
-
-__device__ RayCollision get_ray_collision(Ray *ray) {
-    RayCollision sphere_collision = get_specific_mesh_collision<Sphere>(ray, const_all_meshes.spheres, const_all_meshes.num_spheres);
-    RayCollision triangle_collision = get_specific_mesh_collision<Triangle>(ray, const_all_meshes.triangles, const_all_meshes.num_triangles);
-    RayCollision quad_collision = get_specific_mesh_collision<Quad>(ray, const_all_meshes.quads, const_all_meshes.num_quads);
-    RayCollision one_way_quad_collision = get_specific_mesh_collision<OneWayQuad>(ray, const_all_meshes.one_way_quads, const_all_meshes.num_one_way_quads);
-    RayCollision cuboid_collision = get_specific_mesh_collision<Cuboid>(ray, const_all_meshes.cuboids, const_all_meshes.num_cuboids);
-
-    RayCollision closest_collision = sphere_collision;
-
-    if (triangle_collision.hit_data.ray_hits && triangle_collision.hit_data.ray_travelled_dist < closest_collision.hit_data.ray_travelled_dist) {
-        //triangle is actually better collision
-        closest_collision = triangle_collision;
-    }
-    if (quad_collision.hit_data.ray_hits && quad_collision.hit_data.ray_travelled_dist < closest_collision.hit_data.ray_travelled_dist) {
-        //quad is actually better collision
-        closest_collision = quad_collision;
-    }
-    if (one_way_quad_collision.hit_data.ray_hits && one_way_quad_collision.hit_data.ray_travelled_dist < closest_collision.hit_data.ray_travelled_dist) {
-        //one way quad is actually better collision
-        closest_collision = one_way_quad_collision;
-    }
-    if (cuboid_collision.hit_data.ray_hits && cuboid_collision.hit_data.ray_travelled_dist < closest_collision.hit_data.ray_travelled_dist) {
-        closest_collision = cuboid_collision;
-    }
-
-    return closest_collision;
+    return best_collision;
 }
 
 

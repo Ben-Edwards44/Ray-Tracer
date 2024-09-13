@@ -103,11 +103,7 @@ class Scene {
         CamData cam_data;
         RenderData render_data;
 
-        std::vector<Sphere> spheres;
-        std::vector<Triangle> triangles;
-        std::vector<Quad> quads;
-        std::vector<OneWayQuad> one_way_quads;
-        std::vector<Cuboid> cuboids;
+        std::vector<Mesh> meshes;
 
         int len_pixel_array;
         int frame_num;
@@ -116,14 +112,10 @@ class Scene {
 
         AllMeshes all_mesh_struct;
 
-        Scene(CamData cam, RenderData r_data, std::vector<Sphere> s, std::vector<Triangle> t, std::vector<Quad> q, std::vector<OneWayQuad> o_q, std::vector<Cuboid> c, int len) {
+        Scene(CamData cam, RenderData r_data, std::vector<Mesh> mesh_data, int len) {
             cam_data = cam;
             render_data = r_data;
-            spheres = s;
-            triangles = t;
-            quads = q;
-            one_way_quads = o_q;
-            cuboids = c;
+            meshes = mesh_data;
 
             len_pixel_array = len;
             frame_num = 0;
@@ -140,26 +132,16 @@ class Scene {
             //to be called before first scene (NOTE: no need to free constant memory)
             cudaMemcpyToSymbol(const_cam_data, &cam_data, sizeof(cam_data));
             cudaMemcpyToSymbol(const_render_data, &render_data, sizeof(render_data));
-            cudaMemcpyToSymbol(const_all_meshes, &all_mesh_struct, sizeof(all_mesh_struct));
+            cudaMemcpyToSymbol(const_meshes, &all_mesh_struct, sizeof(all_mesh_struct));
         }
 
         AllMeshes get_meshes() {
             //NOTE: I'm not sure I ever free the memory used here... (I'll just leave it for now)
-            ReadOnlyDeviceArray<Sphere> d_spheres(spheres);
-            ReadOnlyDeviceArray<Triangle> d_triangles(triangles);
-            ReadOnlyDeviceArray<Quad> d_quads(quads);
-            ReadOnlyDeviceArray<OneWayQuad> d_one_way_quads(one_way_quads);
-            ReadOnlyDeviceArray<Cuboid> d_cuboids(cuboids);
+            int num_meshes = meshes.size();
+            
+            ReadOnlyDeviceArray<Mesh> d_meshes(meshes);
 
-            int num_spheres = spheres.size();
-            int num_triangles = triangles.size();
-            int num_quads = quads.size();
-            int num_one_way_quads = one_way_quads.size();
-            int num_cuboids = cuboids.size();
-
-            AllMeshes meshes{d_spheres.device_pointer, d_triangles.device_pointer, d_quads.device_pointer, d_one_way_quads.device_pointer, d_cuboids.device_pointer, num_spheres, num_triangles, num_quads, num_one_way_quads, num_cuboids};
-
-            return meshes;
+            return AllMeshes{d_meshes.device_pointer, num_meshes};
         }
 };
 

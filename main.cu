@@ -8,7 +8,7 @@
 #include <SFML/Graphics.hpp>
 
 
-const int SCENE_NUM = 3;
+const int SCENE_NUM = 0;
 
 const int WIDTH = 1000;
 const int HEIGHT = 800;
@@ -112,11 +112,7 @@ class ImageTexture {
 
 class Meshes {
     public:
-        std::vector<Sphere> spheres;
-        std::vector<Triangle> triangles;
-        std::vector<Quad> quads;
-        std::vector<OneWayQuad> one_way_quads;
-        std::vector<Cuboid> cuboids;
+        std::vector<Mesh> meshes;
 
         Meshes(int test_scene) {
             switch (test_scene) {
@@ -142,11 +138,11 @@ class Meshes {
             //parse the object faces into triangles and add them to the list of triangles
             for (std::vector<float3> face : obj.faces) {
                 if (face.size() == 3) {
-                    Triangle tri(Vec3(face[0]), Vec3(face[1]), Vec3(face[2]), mat);
-                    triangles.push_back(tri);
+                    Mesh triangle = Mesh::create_triangle(Vec3(face[0]), Vec3(face[1]), Vec3(face[2]), mat);
+                    meshes.push_back(triangle);
                 } else if (face.size() == 4) {
-                    Quad quad(Vec3(face[0]), Vec3(face[1]), Vec3(face[2]), Vec3(face[3]), mat);
-                    quads.push_back(quad);
+                    Mesh quad = Mesh::create_quad(Vec3(face[0]), Vec3(face[1]), Vec3(face[2]), Vec3(face[3]), mat);
+                    meshes.push_back(quad);
                 } else {
                     throw std::logic_error("Only triangle or quad meshes are supported.\n");
                 }
@@ -169,9 +165,9 @@ class Meshes {
 
             Texture sphere_tex = Texture::create_const_colour(Vec3(0.8, 0.8, 0.8));
             Material sphere_mat = Material::create_standard(sphere_tex, 1);
-            Sphere sphere(Vec3(-0.25, -0.25, 1.95), 0.25, sphere_mat);
+            Mesh sphere = Mesh::create_sphere(Vec3(-0.25, -0.25, 1.95), 0.25, sphere_mat);
 
-            spheres.push_back(sphere);
+            meshes.push_back(sphere);
         }
 
         void reflection_test_scene() {
@@ -185,10 +181,10 @@ class Meshes {
             Material c = Material::create_standard(sphere_tex, 0.66);
             Material d = Material::create_standard(sphere_tex, 1);
 
-            spheres.push_back(Sphere(Vec3(-0.2, 0.2, 1.7), 0.15, a));
-            spheres.push_back(Sphere(Vec3(0.2, 0.2, 1.7), 0.15, b));
-            spheres.push_back(Sphere(Vec3(-0.2, -0.2, 1.7), 0.15, c));
-            spheres.push_back(Sphere(Vec3(0.2, -0.2, 1.7), 0.15, d));
+            meshes.push_back(Mesh::create_sphere(Vec3(-0.2, 0.2, 1.7), 0.15, a));
+            meshes.push_back(Mesh::create_sphere(Vec3(0.2, 0.2, 1.7), 0.15, b));
+            meshes.push_back(Mesh::create_sphere(Vec3(-0.2, -0.2, 1.7), 0.15, c));
+            meshes.push_back(Mesh::create_sphere(Vec3(0.2, -0.2, 1.7), 0.15, d));
         }
 
         void texture_test_scene() {
@@ -198,14 +194,14 @@ class Meshes {
             ImageTexture earth("earth.png");
             Material earth_mat = Material::create_standard(earth.get_device_texture(), 0);
 
-            spheres.push_back(Sphere(Vec3(0, 0, 1.7), 0.25, earth_mat));
+            meshes.push_back(Mesh::create_sphere(Vec3(0, 0, 1.7), 0.25, earth_mat));
 
             Texture tri_tex = Texture::create_checkerboard(Vec3(1, 1, 1), Vec3(0, 0, 0), 4);
             Material tri_mat = Material::create_standard(tri_tex, 0);
 
-            Triangle t1(Vertex{Vec3(0.1, 0, 1.7), Vec2(0, 0)}, Vertex{Vec3(0.6, 0.5, 1.9), Vec2(0, 1)}, Vertex{Vec3(0.8, 0.4, 2), Vec2(1, 1)}, tri_mat);
+            Mesh t1 = Mesh::create_triangle(Vertex{Vec3(0.1, 0, 1.7), Vec2(0, 0)}, Vertex{Vec3(0.6, 0.5, 1.9), Vec2(0, 1)}, Vertex{Vec3(0.8, 0.4, 2), Vec2(1, 1)}, tri_mat);
 
-            triangles.push_back(t1);
+            meshes.push_back(t1);
         }
 
         void refract_test_scene() {
@@ -214,7 +210,7 @@ class Meshes {
             Texture refract_tex = Texture::create_const_colour(Vec3(1, 1, 1));
             Material refract_mat = Material::create_refractive(refract_tex, 1.5);
 
-            spheres.push_back(Sphere(Vec3(0, -0.1, 1.7), 0.3, refract_mat));
+            meshes.push_back(Mesh::create_sphere(Vec3(0, -0.1, 1.7), 0.3, refract_mat));
         }
 
         void create_cornell_box(Vec3 tl_near_pos, float width, float height, float depth, float light_width) {
@@ -237,20 +233,20 @@ class Meshes {
             Vec3 h(0, height, 0);
             Vec3 d(0, 0, depth);
 
-            quads.push_back(Quad(tl_near_pos - h, tl_near_pos - h + w, tl_near_pos - h + w + d, tl_near_pos - h + d, floor));
-            quads.push_back(Quad(tl_near_pos, tl_near_pos - h, tl_near_pos - h + d, tl_near_pos + d, l_wall));
-            quads.push_back(Quad(tl_near_pos + w, tl_near_pos + w - h, tl_near_pos + w - h + d, tl_near_pos + w + d, r_wall));
-            quads.push_back(Quad(tl_near_pos + d, tl_near_pos + w + d, tl_near_pos + w - h + d, tl_near_pos - h + d, back));
-            quads.push_back(Quad(tl_near_pos, tl_near_pos + d, tl_near_pos + w + d, tl_near_pos + w, roof));
-            one_way_quads.push_back(OneWayQuad(tl_near_pos, tl_near_pos + w, tl_near_pos + w - h, tl_near_pos - h, front, false));  //front wall is one way so we can see through it
+            meshes.push_back(Mesh::create_quad(tl_near_pos - h, tl_near_pos - h + w, tl_near_pos - h + w + d, tl_near_pos - h + d, floor));
+            meshes.push_back(Mesh::create_quad(tl_near_pos, tl_near_pos - h, tl_near_pos - h + d, tl_near_pos + d, l_wall));
+            meshes.push_back(Mesh::create_quad(tl_near_pos + w, tl_near_pos + w - h, tl_near_pos + w - h + d, tl_near_pos + w + d, r_wall));
+            meshes.push_back(Mesh::create_quad(tl_near_pos + d, tl_near_pos + w + d, tl_near_pos + w - h + d, tl_near_pos - h + d, back));
+            meshes.push_back(Mesh::create_quad(tl_near_pos, tl_near_pos + d, tl_near_pos + w + d, tl_near_pos + w, roof));
+            meshes.push_back(Mesh::create_one_way_quad(tl_near_pos, tl_near_pos + w, tl_near_pos + w - h, tl_near_pos - h, false, front));  //front wall is one way so we can see through it
 
             //add the light
             Material light_mat = Material::create_emissive(Vec3(1, 1, 1), 6);
 
             Vec3 light_tl_near_pos(tl_near_pos.x + width / 2 - light_width / 2, tl_near_pos.y, tl_near_pos.z + depth / 2 - light_width / 2);  //ensure light is in center of roof
-            Cuboid light(light_tl_near_pos, light_width, 0.04, light_width, light_mat);
+            Mesh light = Mesh::create_cuboid(light_tl_near_pos, light_width, 0.04, light_width, light_mat);
 
-            cuboids.push_back(light);
+            meshes.push_back(light);
         }
 };
 
@@ -259,10 +255,10 @@ class RenderSettings {
     public:
         RenderData gpu_struct;
 
-        RenderSettings(int num_spheres) {
+        RenderSettings() {
             assign_default();
 
-            gpu_struct = create_gpu_struct(num_spheres);
+            gpu_struct = create_gpu_struct();
         }
 
     private:
@@ -277,16 +273,16 @@ class RenderSettings {
         void assign_default() {
             //these settings can be changed
             reflect_limit = 5;
-            rays_per_pixel = 100;
+            rays_per_pixel = 10;
 
             antialias = true;
 
-            sky_colour.x = 0;//0.7;
-            sky_colour.y = 0;//0.7;
-            sky_colour.z = 0;//0.98;
+            sky_colour.x = 0;
+            sky_colour.y = 0;
+            sky_colour.z = 0;
         }
 
-        RenderData create_gpu_struct(int num_spheres) {
+        RenderData create_gpu_struct() {
             return RenderData{rays_per_pixel, reflect_limit, antialias, sky_colour};
         }
 };
@@ -295,11 +291,11 @@ class RenderSettings {
 Scene create_scene(int img_width, int img_height) {
     Camera cam;
     Meshes meshes(SCENE_NUM);
-    RenderSettings render_settings(meshes.spheres.size());
+    RenderSettings render_settings;
 
     int len_pixel_array = img_width * img_height * 3;
 
-    return Scene(cam.gpu_struct, render_settings.gpu_struct, meshes.spheres, meshes.triangles, meshes.quads, meshes.one_way_quads, meshes.cuboids, len_pixel_array);
+    return Scene(cam.gpu_struct, render_settings.gpu_struct, meshes.meshes, len_pixel_array);
 }
 
 
