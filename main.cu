@@ -107,11 +107,11 @@ class ImageTexture {
 };
 
 
-class Meshes {
+class SceneObjects {
     public:
         AllObjects gpu_struct;
 
-        Meshes(int test_scene) {
+        SceneObjects(int test_scene) {
             switch (test_scene) {
                 case 0:
                     monkey_test_scene();
@@ -363,7 +363,7 @@ void draw_screen(sf::RenderWindow *window, std::vector<float> pixel_colours) {
 
 void init() {
     Camera cam_data;
-    Meshes mesh_data(SCENE_NUM);
+    SceneObjects mesh_data(SCENE_NUM);
     RenderSettings render_data;
 
     allocate_constant_mem(cam_data.gpu_struct, render_data.gpu_struct, mesh_data.gpu_struct);
