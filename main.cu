@@ -135,19 +135,22 @@ class Meshes {
     private:
         std::vector<Object> meshes;
 
-        void add_obj_faces(ObjFileMesh obj, Material mat) {
-            //parse the object faces into triangles and add them to the list of triangles
+        Object create_mesh(ObjFileMesh obj, Material mat) {
+            //parse the object file mesh faces into triangles and add create a mesh instance that can be used on the gpu
+            std::vector<Triangle> triangles;
+
             for (std::vector<float3> face : obj.faces) {
                 if (face.size() == 3) {
-                    Object triangle = Object::create_triangle(Vec3(face[0]), Vec3(face[1]), Vec3(face[2]), mat);
-                    meshes.push_back(triangle);
-                } else if (face.size() == 4) {
-                    Object quad = Object::create_quad(Vec3(face[0]), Vec3(face[1]), Vec3(face[2]), Vec3(face[3]), mat);
-                    meshes.push_back(quad);
+                    Triangle tri(Vec3(face[0]), Vec3(face[1]), Vec3(face[2]), mat);
+                    triangles.push_back(tri);
                 } else {
-                    throw std::logic_error("Only triangle or quad meshes are supported.\n");
+                    throw std::logic_error("Only triangle meshes are supported.\n");
                 }
             }
+
+            ReadOnlyDeviceArray<Triangle> triangle_array(triangles);
+
+            return Object::create_mesh(triangle_array.device_pointer, triangles.size(), mat);
         }
 
         void monkey_test_scene() {
@@ -162,7 +165,8 @@ class Meshes {
             m.rotate(0, 2.3, 0);
             m.translate(0.1, -0.1, 1.6);
 
-            add_obj_faces(m, monkey_mat);
+            Object monkey_mesh = create_mesh(m, monkey_mat);
+            meshes.push_back(monkey_mesh);
 
             Texture sphere_tex = Texture::create_const_colour(Vec3(0.8, 0.8, 0.8));
             Material sphere_mat = Material::create_standard(sphere_tex, 1);

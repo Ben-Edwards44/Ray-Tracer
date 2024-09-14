@@ -385,6 +385,34 @@ __host__ __device__ class Cuboid {
 };
 
 
+__host__ __device__ class Mesh {
+    public:
+        __host__ Mesh() {}
+
+        __host__ Mesh(Triangle *device_triangle_array, int array_len) {
+            num_triangles = array_len;
+            triangles = device_triangle_array;
+        }
+
+        __device__ RayHitData hit(Ray *ray) {
+            RayHitData closest_hit{false, INF};
+
+            for (int i = 0; i < num_triangles; i++) {
+                RayHitData hit_data = triangles[i].hit(ray);
+
+                if (hit_data.ray_hits && hit_data.ray_travelled_dist < closest_hit.ray_travelled_dist) {closest_hit = hit_data;}
+            }
+
+            return closest_hit;
+        }
+
+    private:
+        int num_triangles;
+
+        Triangle *triangles;
+};
+
+
 __host__ __device__ class Object {
     public:
         //again, like with the textures, inheritance and polymorphism is the correct way to go here. I can't seem to get it to work on the GPU :(
@@ -393,6 +421,7 @@ __host__ __device__ class Object {
         static const int QUAD = 2;
         static const int ONE_WAY_QUAD = 3;
         static const int CUBOID = 4;
+        static const int MESH = 5;
 
         int type;
 
@@ -401,6 +430,7 @@ __host__ __device__ class Object {
         Quad quad;
         OneWayQuad one_way_quad;
         Cuboid cuboid;
+        Mesh mesh;
 
         Material material;
 
@@ -421,62 +451,73 @@ __host__ __device__ class Object {
                     return one_way_quad.hit(ray);
                 case CUBOID:
                     return cuboid.hit(ray);
+                case MESH:
+                    return mesh.hit(ray);
             }
         }
 
         //initialisers for each type
         __host__ static Object create_sphere(Vec3 center, float radius, Material mat) {
             Sphere s(center, radius, mat);
-            Object m(SPHERE, mat);
+            Object obj(SPHERE, mat);
 
-            m.sphere = s;
+            obj.sphere = s;
 
-            return m;
+            return obj;
         }
 
         __host__ static Object create_triangle(Vec3 point1, Vec3 point2, Vec3 point3, Material mat) {
             Triangle t(point1, point2, point3, mat);
-            Object m(TRIANGLE, mat);
+            Object obj(TRIANGLE, mat);
 
-            m.triangle = t;
+            obj.triangle = t;
 
-            return m;
+            return obj;
         }
 
         __host__ static Object create_triangle(Vertex point1, Vertex point2, Vertex point3, Material mat) {
             Triangle t(point1, point2, point3, mat);
-            Object m(TRIANGLE, mat);
+            Object obj(TRIANGLE, mat);
 
-            m.triangle = t;
+            obj.triangle = t;
 
-            return m;
+            return obj;
         }
 
         __host__ static Object create_quad(Vec3 point1, Vec3 point2, Vec3 point3, Vec3 point4, Material mat) {
             Quad q(point1, point2, point3, point4, mat);
-            Object m(QUAD, mat);
+            Object obj(QUAD, mat);
 
-            m.quad = q;
+            obj.quad = q;
 
-            return m;
+            return obj;
         }
 
         __host__ static Object create_one_way_quad(Vec3 point1, Vec3 point2, Vec3 point3, Vec3 point4, bool invert_normal, Material mat) {
             OneWayQuad q(point1, point2, point3, point4, invert_normal, mat);
-            Object m(ONE_WAY_QUAD, mat);
+            Object obj(ONE_WAY_QUAD, mat);
 
-            m.one_way_quad = q;
+            obj.one_way_quad = q;
 
-            return m;
+            return obj;
         }
 
         __host__ static Object create_cuboid(Vec3 tl_near_pos, float width, float height, float depth, Material mat) {
             Cuboid c(tl_near_pos, width, height, depth, mat);
-            Object m(CUBOID, mat);
+            Object obj(CUBOID, mat);
 
-            m.cuboid = c;
+            obj.cuboid = c;
 
-            return m;
+            return obj;
+        }
+
+        __host__ static Object create_mesh(Triangle *device_triangle_array, int array_len, Material mat) {
+            Mesh m(device_triangle_array, array_len);
+            Object obj(MESH, mat);
+
+            obj.mesh = m;
+
+            return obj;
         }
 };
 
