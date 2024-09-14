@@ -189,12 +189,12 @@ class RotationMatrix : public Matrix {
 };
 
 
-class Object {
+class ObjFileMesh {
     public:
         Matrix vertex_mat;
         std::vector<std::vector<float3>> faces;
 
-        Object(std::string filename) {
+        ObjFileMesh(std::string filename) {
             file_contents = read_file(filename);
             vertex_mat = get_vertex_mat(read_vertices());
 

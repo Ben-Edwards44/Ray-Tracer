@@ -385,7 +385,7 @@ __host__ __device__ class Cuboid {
 };
 
 
-__host__ __device__ class Mesh {
+__host__ __device__ class Object {
     public:
         //again, like with the textures, inheritance and polymorphism is the correct way to go here. I can't seem to get it to work on the GPU :(
         static const int SPHERE = 0;
@@ -404,7 +404,7 @@ __host__ __device__ class Mesh {
 
         Material material;
 
-        __host__ Mesh(int t, Material mat) {
+        __host__ Object(int t, Material mat) {
             type = t;
             material = mat;
         }
@@ -425,54 +425,54 @@ __host__ __device__ class Mesh {
         }
 
         //initialisers for each type
-        __host__ static Mesh create_sphere(Vec3 center, float radius, Material mat) {
+        __host__ static Object create_sphere(Vec3 center, float radius, Material mat) {
             Sphere s(center, radius, mat);
-            Mesh m(SPHERE, mat);
+            Object m(SPHERE, mat);
 
             m.sphere = s;
 
             return m;
         }
 
-        __host__ static Mesh create_triangle(Vec3 point1, Vec3 point2, Vec3 point3, Material mat) {
+        __host__ static Object create_triangle(Vec3 point1, Vec3 point2, Vec3 point3, Material mat) {
             Triangle t(point1, point2, point3, mat);
-            Mesh m(TRIANGLE, mat);
+            Object m(TRIANGLE, mat);
 
             m.triangle = t;
 
             return m;
         }
 
-        __host__ static Mesh create_triangle(Vertex point1, Vertex point2, Vertex point3, Material mat) {
+        __host__ static Object create_triangle(Vertex point1, Vertex point2, Vertex point3, Material mat) {
             Triangle t(point1, point2, point3, mat);
-            Mesh m(TRIANGLE, mat);
+            Object m(TRIANGLE, mat);
 
             m.triangle = t;
 
             return m;
         }
 
-        __host__ static Mesh create_quad(Vec3 point1, Vec3 point2, Vec3 point3, Vec3 point4, Material mat) {
+        __host__ static Object create_quad(Vec3 point1, Vec3 point2, Vec3 point3, Vec3 point4, Material mat) {
             Quad q(point1, point2, point3, point4, mat);
-            Mesh m(QUAD, mat);
+            Object m(QUAD, mat);
 
             m.quad = q;
 
             return m;
         }
 
-        __host__ static Mesh create_one_way_quad(Vec3 point1, Vec3 point2, Vec3 point3, Vec3 point4, bool invert_normal, Material mat) {
+        __host__ static Object create_one_way_quad(Vec3 point1, Vec3 point2, Vec3 point3, Vec3 point4, bool invert_normal, Material mat) {
             OneWayQuad q(point1, point2, point3, point4, invert_normal, mat);
-            Mesh m(ONE_WAY_QUAD, mat);
+            Object m(ONE_WAY_QUAD, mat);
 
             m.one_way_quad = q;
 
             return m;
         }
 
-        __host__ static Mesh create_cuboid(Vec3 tl_near_pos, float width, float height, float depth, Material mat) {
+        __host__ static Object create_cuboid(Vec3 tl_near_pos, float width, float height, float depth, Material mat) {
             Cuboid c(tl_near_pos, width, height, depth, mat);
-            Mesh m(CUBOID, mat);
+            Object m(CUBOID, mat);
 
             m.cuboid = c;
 
@@ -481,10 +481,10 @@ __host__ __device__ class Mesh {
 };
 
 
-__device__ struct AllMeshes {
-    Mesh *meshes;
+__device__ struct AllObjects {
+    Object *meshes;
     int num_meshes;
 };
 
 
-__constant__ AllMeshes const_meshes;
+__constant__ AllObjects const_objects;

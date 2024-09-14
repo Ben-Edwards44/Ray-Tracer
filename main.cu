@@ -1,4 +1,4 @@
-#include "object.cu"
+#include "obj_read.cu"
 #include "gpu/dispatch.cu"
 
 #include <cmath>
@@ -109,7 +109,7 @@ class ImageTexture {
 
 class Meshes {
     public:
-        AllMeshes gpu_struct;
+        AllObjects gpu_struct;
 
         Meshes(int test_scene) {
             switch (test_scene) {
@@ -133,16 +133,16 @@ class Meshes {
         }
 
     private:
-        std::vector<Mesh> meshes;
+        std::vector<Object> meshes;
 
-        void add_obj_faces(Object obj, Material mat) {
+        void add_obj_faces(ObjFileMesh obj, Material mat) {
             //parse the object faces into triangles and add them to the list of triangles
             for (std::vector<float3> face : obj.faces) {
                 if (face.size() == 3) {
-                    Mesh triangle = Mesh::create_triangle(Vec3(face[0]), Vec3(face[1]), Vec3(face[2]), mat);
+                    Object triangle = Object::create_triangle(Vec3(face[0]), Vec3(face[1]), Vec3(face[2]), mat);
                     meshes.push_back(triangle);
                 } else if (face.size() == 4) {
-                    Mesh quad = Mesh::create_quad(Vec3(face[0]), Vec3(face[1]), Vec3(face[2]), Vec3(face[3]), mat);
+                    Object quad = Object::create_quad(Vec3(face[0]), Vec3(face[1]), Vec3(face[2]), Vec3(face[3]), mat);
                     meshes.push_back(quad);
                 } else {
                     throw std::logic_error("Only triangle or quad meshes are supported.\n");
@@ -157,7 +157,7 @@ class Meshes {
             Texture monkey_tex = Texture::create_const_colour(Vec3(1, 1, 1));
             Material monkey_mat = Material::create_standard(monkey_tex, 0);
 
-            Object m("low_poly_monkey.obj");
+            ObjFileMesh m("low_poly_monkey.obj");
             m.enlarge(0.3);
             m.rotate(0, 2.3, 0);
             m.translate(0.1, -0.1, 1.6);
@@ -166,7 +166,7 @@ class Meshes {
 
             Texture sphere_tex = Texture::create_const_colour(Vec3(0.8, 0.8, 0.8));
             Material sphere_mat = Material::create_standard(sphere_tex, 1);
-            Mesh sphere = Mesh::create_sphere(Vec3(-0.25, -0.25, 1.95), 0.25, sphere_mat);
+            Object sphere = Object::create_sphere(Vec3(-0.25, -0.25, 1.95), 0.25, sphere_mat);
 
             meshes.push_back(sphere);
         }
@@ -182,10 +182,10 @@ class Meshes {
             Material c = Material::create_standard(sphere_tex, 0.66);
             Material d = Material::create_standard(sphere_tex, 1);
 
-            meshes.push_back(Mesh::create_sphere(Vec3(-0.2, 0.2, 1.7), 0.15, a));
-            meshes.push_back(Mesh::create_sphere(Vec3(0.2, 0.2, 1.7), 0.15, b));
-            meshes.push_back(Mesh::create_sphere(Vec3(-0.2, -0.2, 1.7), 0.15, c));
-            meshes.push_back(Mesh::create_sphere(Vec3(0.2, -0.2, 1.7), 0.15, d));
+            meshes.push_back(Object::create_sphere(Vec3(-0.2, 0.2, 1.7), 0.15, a));
+            meshes.push_back(Object::create_sphere(Vec3(0.2, 0.2, 1.7), 0.15, b));
+            meshes.push_back(Object::create_sphere(Vec3(-0.2, -0.2, 1.7), 0.15, c));
+            meshes.push_back(Object::create_sphere(Vec3(0.2, -0.2, 1.7), 0.15, d));
         }
 
         void texture_test_scene() {
@@ -195,12 +195,12 @@ class Meshes {
             ImageTexture earth("earth.png");
             Material earth_mat = Material::create_standard(earth.get_device_texture(), 0);
 
-            meshes.push_back(Mesh::create_sphere(Vec3(0, 0, 1.7), 0.25, earth_mat));
+            meshes.push_back(Object::create_sphere(Vec3(0, 0, 1.7), 0.25, earth_mat));
 
             Texture tri_tex = Texture::create_checkerboard(Vec3(1, 1, 1), Vec3(0, 0, 0), 4);
             Material tri_mat = Material::create_standard(tri_tex, 0);
 
-            Mesh t1 = Mesh::create_triangle(Vertex{Vec3(0.1, 0, 1.7), Vec2(0, 0)}, Vertex{Vec3(0.6, 0.5, 1.9), Vec2(0, 1)}, Vertex{Vec3(0.8, 0.4, 2), Vec2(1, 1)}, tri_mat);
+            Object t1 = Object::create_triangle(Vertex{Vec3(0.1, 0, 1.7), Vec2(0, 0)}, Vertex{Vec3(0.6, 0.5, 1.9), Vec2(0, 1)}, Vertex{Vec3(0.8, 0.4, 2), Vec2(1, 1)}, tri_mat);
 
             meshes.push_back(t1);
         }
@@ -211,7 +211,7 @@ class Meshes {
             Texture refract_tex = Texture::create_const_colour(Vec3(1, 1, 1));
             Material refract_mat = Material::create_refractive(refract_tex, 1.5);
 
-            meshes.push_back(Mesh::create_sphere(Vec3(0, -0.1, 1.7), 0.3, refract_mat));
+            meshes.push_back(Object::create_sphere(Vec3(0, -0.1, 1.7), 0.3, refract_mat));
         }
 
         void create_cornell_box(Vec3 tl_near_pos, float width, float height, float depth, float light_width) {
@@ -234,27 +234,27 @@ class Meshes {
             Vec3 h(0, height, 0);
             Vec3 d(0, 0, depth);
 
-            meshes.push_back(Mesh::create_quad(tl_near_pos - h, tl_near_pos - h + w, tl_near_pos - h + w + d, tl_near_pos - h + d, floor));
-            meshes.push_back(Mesh::create_quad(tl_near_pos, tl_near_pos - h, tl_near_pos - h + d, tl_near_pos + d, l_wall));
-            meshes.push_back(Mesh::create_quad(tl_near_pos + w, tl_near_pos + w - h, tl_near_pos + w - h + d, tl_near_pos + w + d, r_wall));
-            meshes.push_back(Mesh::create_quad(tl_near_pos + d, tl_near_pos + w + d, tl_near_pos + w - h + d, tl_near_pos - h + d, back));
-            meshes.push_back(Mesh::create_quad(tl_near_pos, tl_near_pos + d, tl_near_pos + w + d, tl_near_pos + w, roof));
-            meshes.push_back(Mesh::create_one_way_quad(tl_near_pos, tl_near_pos + w, tl_near_pos + w - h, tl_near_pos - h, false, front));  //front wall is one way so we can see through it
+            meshes.push_back(Object::create_quad(tl_near_pos - h, tl_near_pos - h + w, tl_near_pos - h + w + d, tl_near_pos - h + d, floor));
+            meshes.push_back(Object::create_quad(tl_near_pos, tl_near_pos - h, tl_near_pos - h + d, tl_near_pos + d, l_wall));
+            meshes.push_back(Object::create_quad(tl_near_pos + w, tl_near_pos + w - h, tl_near_pos + w - h + d, tl_near_pos + w + d, r_wall));
+            meshes.push_back(Object::create_quad(tl_near_pos + d, tl_near_pos + w + d, tl_near_pos + w - h + d, tl_near_pos - h + d, back));
+            meshes.push_back(Object::create_quad(tl_near_pos, tl_near_pos + d, tl_near_pos + w + d, tl_near_pos + w, roof));
+            meshes.push_back(Object::create_one_way_quad(tl_near_pos, tl_near_pos + w, tl_near_pos + w - h, tl_near_pos - h, false, front));  //front wall is one way so we can see through it
 
             //add the light
             Material light_mat = Material::create_emissive(Vec3(1, 1, 1), 6);
 
             Vec3 light_tl_near_pos(tl_near_pos.x + width / 2 - light_width / 2, tl_near_pos.y, tl_near_pos.z + depth / 2 - light_width / 2);  //ensure light is in center of roof
-            Mesh light = Mesh::create_cuboid(light_tl_near_pos, light_width, 0.04, light_width, light_mat);
+            Object light = Object::create_cuboid(light_tl_near_pos, light_width, 0.04, light_width, light_mat);
 
             meshes.push_back(light);
         }
 
-        AllMeshes create_gpu_struct() {
+        AllObjects create_gpu_struct() {
             int num_meshes = meshes.size();
-            ReadOnlyDeviceArray<Mesh> array(meshes);
+            ReadOnlyDeviceArray<Object> array(meshes);
 
-            return AllMeshes{array.device_pointer, num_meshes};
+            return AllObjects{array.device_pointer, num_meshes};
         }
 };
 

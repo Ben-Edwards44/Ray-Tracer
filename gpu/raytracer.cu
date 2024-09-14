@@ -1,4 +1,4 @@
-#include "meshes.cu"
+#include "objects.cu"
 
 
 __host__ __device__ struct RenderData {
@@ -28,8 +28,8 @@ __device__ RayCollision get_ray_collision(Ray *ray) {
     best_collision.hit_data.ray_hits = false;
     best_collision.hit_data.ray_travelled_dist = INF;
 
-    for (int i = 0; i < const_meshes.num_meshes; i++) {
-        RayHitData current_hit_data = const_meshes.meshes[i].hit(ray);
+    for (int i = 0; i < const_objects.num_meshes; i++) {
+        RayHitData current_hit_data = const_objects.meshes[i].hit(ray);
 
         if (!current_hit_data.ray_hits) {continue;}
 
@@ -38,7 +38,7 @@ __device__ RayCollision get_ray_collision(Ray *ray) {
         
         if (closest_to_cam && !precision_error) {
             best_collision.hit_data = current_hit_data;
-            best_collision.hit_mesh_material = const_meshes.meshes[i].material;
+            best_collision.hit_mesh_material = const_objects.meshes[i].material;
         }
     }
 

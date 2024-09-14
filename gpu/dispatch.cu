@@ -102,11 +102,11 @@ class ReadOnlyDeviceValue {
 };
 
 
-void allocate_constant_mem(CamData cam_data, RenderData render_data, AllMeshes mesh_data) {
+void allocate_constant_mem(CamData cam_data, RenderData render_data, AllObjects mesh_data) {
     //to be called before first scene (NOTE: no need to free constant memory)
     cudaMemcpyToSymbol(const_cam_data, &cam_data, sizeof(cam_data));
     cudaMemcpyToSymbol(const_render_data, &render_data, sizeof(render_data));
-    cudaMemcpyToSymbol(const_meshes, &mesh_data, sizeof(mesh_data));
+    cudaMemcpyToSymbol(const_objects, &mesh_data, sizeof(mesh_data));
 }
 
 
