@@ -9,6 +9,10 @@
 
 
 const int SCENE_NUM = 0;
+
+const bool USE_SKY = true;
+const Vec3 SKY_COLOUR(0.5, 1, 1);
+
 const float ASPECT = static_cast<float>(WIDTH) / static_cast<float>(HEIGHT);  //static cast is used to stop integer division. WIDTH and HEIGHT are defined in gpu/dispatch.cu
 
 const std::string CAPTION = "ray tracer";
@@ -143,14 +147,19 @@ class SceneObjects {
                 if (face.size() == 3) {
                     Triangle tri(Vec3(face[0]), Vec3(face[1]), Vec3(face[2]), mat);
                     triangles.push_back(tri);
+                } else if (face.size() == 4) {
+                    Quad quad(Vec3(face[0]), Vec3(face[1]), Vec3(face[2]), Vec3(face[3]), mat);
+                    
+                    triangles.push_back(quad.t1);
+                    triangles.push_back(quad.t2);
                 } else {
-                    throw std::logic_error("Only triangle meshes are supported.\n");
+                    throw std::logic_error("Only triangle or quad meshes are supported.\n");
                 }
             }
 
-            ReadOnlyDeviceArray<Triangle> triangle_array(triangles);
+            ReadOnlyDeviceArray<Triangle> device_array(triangles);
 
-            return Object::create_mesh(triangle_array.device_pointer, triangles.size(), mat);
+            return Object::create_mesh(triangles, device_array.device_pointer, mat);
         }
 
         void monkey_test_scene() {
@@ -289,9 +298,11 @@ class RenderSettings {
 
             antialias = true;
 
-            sky_colour.x = 0;
-            sky_colour.y = 0;
-            sky_colour.z = 0;
+            if (USE_SKY) {
+                sky_colour = SKY_COLOUR;
+            } else {
+                sky_colour = Vec3(0, 0, 0);
+            }
         }
 };
 

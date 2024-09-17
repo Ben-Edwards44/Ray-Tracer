@@ -101,6 +101,8 @@ __host__ __device__ class Sphere {
 
 __host__ __device__ class Triangle {
     public:
+        Vec3 points[3];
+
         Material material;
         Vec3 normal_vec;
 
@@ -184,7 +186,6 @@ __host__ __device__ class Triangle {
         private:
             Plane plane;
 
-            Vec3 points[3];
             Vec2 texture_points[3];
 
             float area;
@@ -237,6 +238,9 @@ __host__ __device__ class Triangle {
 
 __host__ __device__ class Quad {
     public:
+        Triangle t1;
+        Triangle t2;
+
         Material material;
 
         __host__ Quad() {}
@@ -268,9 +272,6 @@ __host__ __device__ class Quad {
         }
 
     protected:  //NOTE: protected is used instead of private so these can be inherited by OneWayQuad
-        Triangle t1;
-        Triangle t2;
-
         Vec3 point1;
         Vec3 point2;
         Vec3 point3;
@@ -385,20 +386,59 @@ __host__ __device__ class Cuboid {
 };
 
 
+__host__ __device__ class BoundingBox {
+    public:
+        Vec3 tl_near;
+        
+        float width;
+        float height;
+        float depth;
+
+        Cuboid cuboid;
+
+        __host__ BoundingBox() {}
+
+        __host__ BoundingBox(Vec3 tl_near_pos, float w, float h, float d) {
+            tl_near = tl_near_pos;
+            width = w;
+            height = h;
+            depth = d;
+
+            Texture t = Texture::create_const_colour(Vec3(0, 0, 0));
+            Material m = Material::create_standard(t, 0);
+
+            cuboid = Cuboid(tl_near, width, height, depth, m);
+        }
+
+        __device__ bool ray_hits(Ray *ray) {
+            //TODO: make more efficient
+            RayHitData hit_data = cuboid.hit(ray);
+
+            return hit_data.ray_hits;
+        }
+};
+
+
 __host__ __device__ class Mesh {
     public:
         __host__ Mesh() {}
 
-        __host__ Mesh(Triangle *device_triangle_array, int array_len) {
-            num_triangles = array_len;
-            triangles = device_triangle_array;
+        __host__ Mesh(std::vector<Triangle> host_triangle_array, Triangle *device_triangle_array) {
+            host_triangles = host_triangle_array;
+            device_triangles = device_triangle_array;
+
+            num_triangles = host_triangle_array.size();
+
+            get_bounding_box();
         }
 
         __device__ RayHitData hit(Ray *ray) {
             RayHitData closest_hit{false, INF};
 
+            if (!bounding_box.ray_hits(ray)) {return closest_hit;}  //ray is never going to hit
+
             for (int i = 0; i < num_triangles; i++) {
-                RayHitData hit_data = triangles[i].hit(ray);
+                RayHitData hit_data = device_triangles[i].hit(ray);
 
                 if (hit_data.ray_hits && hit_data.ray_travelled_dist < closest_hit.ray_travelled_dist) {closest_hit = hit_data;}
             }
@@ -409,13 +449,55 @@ __host__ __device__ class Mesh {
     private:
         int num_triangles;
 
-        Triangle *triangles;
+        Triangle *device_triangles;
+        std::vector<Triangle> host_triangles;
+
+        BoundingBox bounding_box;
+
+        __host__ void get_bounding_box() {
+            if (num_triangles == 0) {return;}  //0 triangles will cause errors
+
+            float width = 0;
+            float height = 0;
+            float depth = 0;
+
+            Vec3 tl = host_triangles[0].points[0];
+            
+            //loop through all triangles and update the bounds (it's ok that this is slow because it is done once before the first render)
+            for (int i = 0; i < num_triangles; i++) {
+                for (int x = 0; x < 3; x++) {
+                    Vec3 point = host_triangles[i].points[x];
+                    Vec3 diff = tl - point;
+
+                    //update top left point (if point is too far left/up/near)
+                    if (diff.x > 0) {
+                        width += diff.x;
+                        tl.x -= diff.x;
+                    }
+                    if (diff.y < 0) {
+                        height -= diff.y;
+                        tl.y -= diff.y;
+                    }
+                    if (diff.z > 0) {
+                        depth += diff.z;
+                        tl.z -= diff.z;
+                    }
+
+                    //update dimensions (if point is too far right/down/far)
+                    if (-diff.x > width) {width = -diff.x;}
+                    if (diff.y > height) {height = diff.y;}
+                    if (-diff.z > depth) {depth = -diff.z;}
+                }
+            }
+
+            bounding_box = BoundingBox(tl, width, height, depth);
+        }
 };
 
 
 __host__ __device__ class Object {
     public:
-        //again, like with the textures, inheritance and polymorphism is the correct way to go here. I can't seem to get it to work on the GPU :(
+        //again, like with the textures, inheritance and polymorphism is the correct way to go here. I just can't seem to get it to work on the GPU :(
         static const int SPHERE = 0;
         static const int TRIANGLE = 1;
         static const int QUAD = 2;
@@ -511,8 +593,8 @@ __host__ __device__ class Object {
             return obj;
         }
 
-        __host__ static Object create_mesh(Triangle *device_triangle_array, int array_len, Material mat) {
-            Mesh m(device_triangle_array, array_len);
+        __host__ static Object create_mesh(std::vector<Triangle> host_triangle_array, Triangle *device_triangle_array, Material mat) {
+            Mesh m(host_triangle_array, device_triangle_array);
             Object obj(MESH, mat);
 
             obj.mesh = m;
