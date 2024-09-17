@@ -9,9 +9,8 @@
 #include <SFML/Graphics.hpp>
 
 
-const int SCENE_NUM = 4;
+const int SCENE_NUM = 1;
 
-const bool USE_SKY = true;
 const Vec3 SKY_COLOUR(0.8, 1, 1);
 
 const float ASPECT = static_cast<float>(WIDTH) / static_cast<float>(HEIGHT);  //static cast is used to stop integer division. WIDTH and HEIGHT are defined in gpu/dispatch.cu
@@ -137,6 +136,8 @@ class ImageTexture {
 class SceneObjects {
     public:
         AllObjects gpu_struct;
+
+        bool use_sky = true;
 
         SceneObjects(int test_scene) {
             switch (test_scene) {
@@ -291,6 +292,8 @@ class SceneObjects {
         }
 
         void create_cornell_box(Vec3 tl_near_pos, float width, float height, float depth, float light_width) {
+            use_sky = false;
+
             Texture floor_tex = Texture::create_checkerboard(Vec3(0.1, 0.8, 0.1), Vec3(0.1, 0.5, 0.1), 8);
             Texture l_wall_tex = Texture::create_const_colour(Vec3(1, 0.2, 0.2));
             Texture r_wall_tex = Texture::create_const_colour(Vec3(0.3, 0.3, 1));
@@ -339,8 +342,8 @@ class RenderSettings {
     public:
         RenderData gpu_struct;
 
-        RenderSettings() {
-            assign_default();
+        RenderSettings(bool use_sky) {
+            assign_default(use_sky);
 
             gpu_struct = RenderData{rays_per_pixel, reflect_limit, antialias, sky_colour};
         }
@@ -354,14 +357,14 @@ class RenderSettings {
 
         Vec3 sky_colour;
 
-        void assign_default() {
+        void assign_default(bool use_sky) {
             //these settings can be changed
             reflect_limit = 5;
             rays_per_pixel = 100;
 
             antialias = true;
 
-            if (USE_SKY) {
+            if (use_sky) {
                 sky_colour = SKY_COLOUR;
             } else {
                 sky_colour = Vec3(0, 0, 0);
@@ -428,7 +431,7 @@ void draw_screen(sf::RenderWindow *window, std::vector<float> pixel_colours) {
 void init() {
     Camera cam_data;
     SceneObjects mesh_data(SCENE_NUM);
-    RenderSettings render_data;
+    RenderSettings render_data(mesh_data.use_sky);
 
     allocate_constant_mem(cam_data.gpu_struct, render_data.gpu_struct, mesh_data.gpu_struct);
 }
