@@ -4,18 +4,41 @@
 #include <cmath>
 #include <vector>
 #include <chrono>
+#include <random>
 
 #include <SFML/Graphics.hpp>
 
 
-const int SCENE_NUM = 0;
+const int SCENE_NUM = 4;
 
 const bool USE_SKY = true;
-const Vec3 SKY_COLOUR(0.5, 1, 1);
+const Vec3 SKY_COLOUR(0.8, 1, 1);
 
 const float ASPECT = static_cast<float>(WIDTH) / static_cast<float>(HEIGHT);  //static cast is used to stop integer division. WIDTH and HEIGHT are defined in gpu/dispatch.cu
 
 const std::string CAPTION = "ray tracer";
+
+
+int get_time() {
+    //get ms since epoch
+    auto clock = std::chrono::system_clock::now();
+    auto duration = clock.time_since_epoch();
+    int time = std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
+
+    return time;
+}
+
+
+float host_rng(float min, float max) {
+    std::random_device rand_device_seed;
+    std::mt19937 gen(rand_device_seed());
+    
+    std::uniform_real_distribution<> dis(0.0, 1.0);
+
+    float normalised = dis(gen);
+
+    return min + normalised * (max - min);
+}
 
 
 class Camera {
@@ -129,6 +152,9 @@ class SceneObjects {
                 case 3:
                     refract_test_scene();
                     break;
+                case 4:
+                    rand_sphere_test_scene();
+                    break;
                 default:
                     throw std::domain_error("Test scene must be number between 0 and 3 (inclusive).\n");
             }
@@ -227,6 +253,43 @@ class SceneObjects {
             objects.push_back(Object::create_sphere(Vec3(0, -0.1, 1.7), 0.3, refract_mat));
         }
 
+        void rand_sphere_test_scene() {
+            //final scene from https://raytracing.github.io/books/RayTracingInOneWeekend.html#wherenext?/afinalrender
+            int num_spheres = 100;
+
+            float floor_y = -1;
+            float floor_width = 10;
+            float floor_depth = 10;
+
+            for (int i = 0; i < num_spheres; i++) {
+                Material material;
+                Texture tex = Texture::create_const_colour(Vec3(host_rng(0, 1), host_rng(0, 1), host_rng(0, 1)));
+
+                float mat_num = host_rng(0, 1);
+
+                if (mat_num < 0.3) {
+                    float smoothness = host_rng(0, 1);
+
+                    material = Material::create_standard(tex, smoothness); 
+                } else if (mat_num < 0.6) {
+                    float refract_inx = host_rng(0.5, 2);
+
+                    material = Material::create_refractive(tex, refract_inx);
+                }
+
+                float radius = host_rng(0.1, 0.5);
+
+                Vec3 center(host_rng(-floor_width / 2, floor_width / 2), floor_y + radius, host_rng(0, floor_depth));
+
+                objects.push_back(Object::create_sphere(center, radius, material));
+            }
+
+            Texture floor_tex = Texture::create_checkerboard(Vec3(0.7, 0.7, 0.7), Vec3(0.4, 0.4, 0.4), 10);
+            Material floor_mat = Material::create_standard(floor_tex, 0);
+
+            objects.push_back(Object::create_quad(Vec3(-floor_width / 2, floor_y, 0), Vec3(floor_width / 2, floor_y, 0), Vec3(floor_width / 2, floor_y, floor_depth), Vec3(-floor_width / 2, floor_y, floor_depth), floor_mat));
+        }
+
         void create_cornell_box(Vec3 tl_near_pos, float width, float height, float depth, float light_width) {
             Texture floor_tex = Texture::create_checkerboard(Vec3(0.1, 0.8, 0.1), Vec3(0.1, 0.5, 0.1), 8);
             Texture l_wall_tex = Texture::create_const_colour(Vec3(1, 0.2, 0.2));
@@ -305,16 +368,6 @@ class RenderSettings {
             }
         }
 };
-
-
-int get_time() {
-    //get ms since epoch
-    auto clock = std::chrono::system_clock::now();
-    auto duration = clock.time_since_epoch();
-    int time = std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
-
-    return time;
-}
 
 
 std::vector<float> get_pixel_colours(VariableRenderData *render_data) {
