@@ -55,6 +55,11 @@ class Camera {
         float fov;
         float focal_len;
 
+        //rotation about each axis
+        float x_rot;
+        float y_rot;
+        float z_rot;
+
         void assign_default() {
             //these values can be changed
             cam_pos.x = 0;
@@ -63,23 +68,67 @@ class Camera {
 
             fov = 60 * (PI / 180);
             focal_len = 0.1;
+
+            x_rot = 0 * (PI / 180);
+            y_rot = 0 * (PI / 180);
+            z_rot = 0 * (PI / 180);
+        }
+
+        Vec3 rotate_point(Vec3 point) {
+            //use the matrix operations from object.cu to rotate a point
+            std::vector<std::vector<float>> point_items = {{point.x}, {point.y}, {point.z}};
+            Matrix rotated_point = RotationMatrix(RotationMatrix::X_AXIS, x_rot) * RotationMatrix(RotationMatrix::Y_AXIS, y_rot) * RotationMatrix(RotationMatrix::Z_AXIS, z_rot) * Matrix(point_items);
+
+            return Vec3(rotated_point.items[0][0], rotated_point.items[1][0], rotated_point.items[2][0]);
+        }
+
+        Vec3 get_u(float viewport_width) {
+            //u is across the top of the screen, pointing left
+            Vec3 default_point(1, 0, 0);
+            Vec3 rotated_point = rotate_point(default_point);
+
+            Vec3 u = rotated_point - Vec3(0, 0, 0);
+
+            float mag_u = viewport_width / WIDTH;
+
+            u.set_mag(mag_u);
+
+            return u;
+        }
+
+        Vec3 get_v(float viewport_height) {
+            //v is down the left of the screen, pointing down
+            Vec3 default_point(0, -1, 0);
+            Vec3 rotated_point = rotate_point(default_point);
+
+            Vec3 v = rotated_point - Vec3(0, 0, 0);
+
+            float mag_v = viewport_height / HEIGHT;
+
+            v.set_mag(mag_v);
+
+            return v;
+        }
+
+        Vec3 get_tl_pos(Vec3 u, Vec3 v) {
+            //get the world position of the top left of the screen
+            Vec3 z_offset(0, 0, cam_pos.z + focal_len);
+            Vec3 u_step = u * -WIDTH / 2;
+            Vec3 v_step = v * -HEIGHT / 2;
+
+            return u_step + v_step + z_offset;
         }
 
         CamData create_gpu_struct() {
             float viewport_width = 2 * focal_len * tan(fov / 2);
             float viewport_height = viewport_width / ASPECT;
-
-            Vec3 tl_pos(cam_pos.x - viewport_width / 2, cam_pos.y + viewport_height / 2, cam_pos.z + focal_len);
         
-            float mag_u = viewport_width / WIDTH;
-            float mag_v = viewport_height / HEIGHT;
-
             //relative from top left
-            Vec3 u(1, 0, 0);
-            Vec3 v(0, -1, 0);
+            Vec3 u = get_u(viewport_width);
+            Vec3 v = get_v(viewport_height);
 
-            u.set_mag(mag_u);
-            v.set_mag(mag_v);
+            //set top left pos
+            Vec3 tl_pos = get_tl_pos(u, v);
 
             return CamData{cam_pos, tl_pos, focal_len, u, v, WIDTH, HEIGHT};
         }
