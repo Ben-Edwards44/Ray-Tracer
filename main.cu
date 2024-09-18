@@ -71,10 +71,17 @@ class Camera {
 
             Vec3 tl_pos(cam_pos.x - viewport_width / 2, cam_pos.y + viewport_height / 2, cam_pos.z + focal_len);
         
-            float delta_u = viewport_width / WIDTH;
-            float delta_v = viewport_height / HEIGHT;
+            float mag_u = viewport_width / WIDTH;
+            float mag_v = viewport_height / HEIGHT;
 
-            return CamData{cam_pos, tl_pos, focal_len, delta_u, delta_v, WIDTH, HEIGHT};
+            //relative from top left
+            Vec3 u(1, 0, 0);
+            Vec3 v(0, -1, 0);
+
+            u.set_mag(mag_u);
+            v.set_mag(mag_v);
+
+            return CamData{cam_pos, tl_pos, focal_len, u, v, WIDTH, HEIGHT};
         }
 };
 

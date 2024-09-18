@@ -143,6 +143,15 @@ class Vec3 {
 
             return Vec3(s1, s2, s3);
         }
+
+        __host__ void set_mag(float desired_mag) {
+            //set the vectors magnitude to the desired_mag
+            float scale = desired_mag / magnitude();
+
+            x *= scale;
+            y *= scale;
+            z *= scale;
+        }
 };
 
 

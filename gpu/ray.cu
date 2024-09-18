@@ -11,8 +11,8 @@ __host__ __device__ struct CamData {
 
     float focal_length;
 
-    float delta_u;
-    float delta_v;
+    Vec3 delta_u;
+    Vec3 delta_v;
 
     int image_width;
     int image_height;
@@ -136,19 +136,15 @@ __device__ class Ray {
     private:
         float current_refractive_index;
 
-        __device__ Vec3 screen_to_world(int x, int y) {
-            //convert a point (x, y) on the viewport projection plane into a world space coordinate
-            Vec3 local_pos;
+        __device__ Vec3 pixel_to_world(int x, int y) {
+            //convert a pixel point (x, y) on the screen plane into a world space coordinate
+            Vec3 plane_point = const_cam_data.delta_u * x + const_cam_data.delta_v * y;
 
-            local_pos.x = x * const_cam_data.delta_u;
-            local_pos.y = -y * const_cam_data.delta_v;
-            local_pos.z = 0;
-
-            return Vec3(const_cam_data.tl_position + local_pos);
+            return const_cam_data.tl_position + plane_point;
         }
 
         __device__ void set_direction_origin() {
-            Vec3 view_pos = screen_to_world(pixel_x, pixel_y);
+            Vec3 view_pos = pixel_to_world(pixel_x, pixel_y);
             Vec3 o = const_cam_data.pos;
             Vec3 dir = view_pos - o;
 
