@@ -116,9 +116,9 @@ __global__ void get_pixel_colour(float *pixel_array, float *previous_render, int
     int pixel_coord_x = threadIdx.x + blockIdx.x * blockDim.x;
     int pixel_coord_y = threadIdx.y + blockIdx.y * blockDim.y;
 
-    if (pixel_coord_x >= const_cam_data.image_width || pixel_coord_y >= const_cam_data.image_height) {return;}  //account for grid size being too big
+    if (pixel_coord_x >= SCREEN_WIDTH || pixel_coord_y >= SCREEN_HEIGHT) {return;}  //account for grid size being too big
     
-    int array_index = (pixel_coord_y * const_cam_data.image_width + pixel_coord_x) * 3;  //multiply by 3 to account for each pixel having r, b, g values
+    int array_index = (pixel_coord_y * SCREEN_WIDTH + pixel_coord_x) * 3;  //multiply by 3 to account for each pixel having r, b, g values
 
     Vec3 previous_colour(previous_render[array_index], previous_render[array_index + 1], previous_render[array_index + 2]);
 

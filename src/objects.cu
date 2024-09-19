@@ -5,8 +5,6 @@
 const int INF = 1 << 31 - 1;
 const float FLOAT_PRECISION_ERROR = 0.000001;
 
-const float PI = 3.141592653589793;
-
 
 struct Plane {
     //ax + by + cz + d = 0

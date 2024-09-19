@@ -5,9 +5,7 @@
 #include "raytracer.cu"
 
 
-const int WIDTH = 1000;
-const int HEIGHT = 800;
-const int PIXEL_ARRAY_LEN = WIDTH * HEIGHT * 3;
+const int PIXEL_ARRAY_LEN = SCREEN_WIDTH * SCREEN_HEIGHT * 3;
 
 
 template<typename T>
@@ -103,9 +101,8 @@ class ReadOnlyDeviceValue {
 };
 
 
-void allocate_constant_mem(CamData cam_data, RenderData render_data, AllObjects mesh_data) {
-    //to be called before first scene (NOTE: no need to free constant memory)
-    cudaMemcpyToSymbol(const_cam_data, &cam_data, sizeof(cam_data));
+void allocate_constant_mem(RenderData render_data, AllObjects mesh_data) {
+    //to be called before first scene (NOTE: no need to free constant memory, camera data is assigned by itself)
     cudaMemcpyToSymbol(const_render_data, &render_data, sizeof(render_data));
     cudaMemcpyToSymbol(const_objects, &mesh_data, sizeof(mesh_data));
 }
@@ -137,7 +134,7 @@ void run_ray_tracer(VariableRenderData *data, int current_time_ms) {
     ReadWriteDeviceArray<float> image_pixels(PIXEL_ARRAY_LEN);
 
     dim3 thread_dim(16, 16);  //max is 1024
-    dim3 block_dim = get_block_size(WIDTH, HEIGHT, thread_dim);
+    dim3 block_dim = get_block_size(SCREEN_WIDTH, SCREEN_HEIGHT, thread_dim);
 
     get_pixel_colour<<<block_dim, thread_dim>>>(image_pixels.array, prev_render.device_pointer, current_time.device_pointer, device_frame_num.device_pointer);  //launch kernel
 
