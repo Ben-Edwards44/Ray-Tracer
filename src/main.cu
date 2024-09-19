@@ -8,7 +8,7 @@
 #include "obj_read.cu"
 
 
-const int SCENE_NUM = 1;
+const int SCENE_NUM = 4;
 
 const Vec3 SKY_COLOUR(0.8, 1, 1);
 

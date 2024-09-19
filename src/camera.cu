@@ -31,12 +31,12 @@ __device__ Vec3 cam_pixel_to_world(int x, int y) {
 
 __host__ __device__ class Camera {
     //these values can be changed
-    const Vec3 CAM_POS = Vec3(0, 0, 0);
+    const Vec3 CAM_POS = Vec3(0, 1.9, 0);
 
     const float FOV = 60 * (PI / 180);
     const float FOCAL_LEN = 0.1;
 
-    const float X_ROT = 0 * (PI / 180);
+    const float X_ROT = -50 * (PI / 180);
     const float Y_ROT = 0 * (PI / 180);
     const float Z_ROT = 0 * (PI / 180);
 
@@ -95,10 +95,10 @@ __host__ __device__ class Camera {
 
         __host__ Vec3 get_tl_pos(Vec3 delta_u, Vec3 delta_v) {
             //get the world position of the top left of the screen
-            Vec3 z_offset(0, 0, CAM_POS.z + FOCAL_LEN);
+            Vec3 offset(CAM_POS.x, CAM_POS.y, CAM_POS.z + FOCAL_LEN);
             Vec3 u_step = delta_u * -SCREEN_WIDTH / 2;
             Vec3 v_step = delta_v * -SCREEN_HEIGHT / 2;
 
-            return u_step + v_step + z_offset;
+            return u_step + v_step + offset;
         }
 };
