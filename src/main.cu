@@ -9,7 +9,7 @@
 #include <SFML/Graphics.hpp>
 
 
-const int SCENE_NUM = 3;
+const int SCENE_NUM = 4;
 
 const Vec3 SKY_COLOUR(0.8, 1, 1);
 
@@ -137,7 +137,7 @@ class Camera {
 
 class ImageTexture {
     public:
-        std::string PARSED_TEXTURE_FILENAME = "../textures/parsed_textures.txt";
+        std::string PARSED_TEXTURE_FILENAME = "textures/parsed_textures.txt";
 
         ImageTexture(std::string filename) {
             parse_file(filename);
@@ -252,7 +252,7 @@ class SceneObjects {
             Texture monkey_tex = Texture::create_const_colour(Vec3(1, 1, 1));
             Material monkey_mat = Material::create_standard(monkey_tex, 0);
 
-            ObjFileMesh m("../models/low_poly_monkey.obj");
+            ObjFileMesh m("models/low_poly_monkey.obj");
             m.enlarge(0.3);
             m.rotate(0, 2.3, 0);
             m.translate(0.1, -0.1, 1.6);
