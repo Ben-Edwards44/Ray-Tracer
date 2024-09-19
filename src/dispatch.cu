@@ -4,6 +4,7 @@
 
 #include "raytracer.cu"
 
+
 const int WIDTH = 1000;
 const int HEIGHT = 800;
 const int PIXEL_ARRAY_LEN = WIDTH * HEIGHT * 3;

@@ -1,5 +1,5 @@
-#include "ray.cu"
 #include <cmath>
+#include "ray.cu"
 
 
 const int INF = 1 << 31 - 1;
