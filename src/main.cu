@@ -1,6 +1,3 @@
-#include "obj_read.cu"
-#include "gpu/dispatch.cu"
-
 #include <cmath>
 #include <vector>
 #include <chrono>
@@ -8,12 +5,12 @@
 
 #include <SFML/Graphics.hpp>
 
+#include "obj_read.cu"
 
-const int SCENE_NUM = 1;
+
+const int SCENE_NUM = 4;
 
 const Vec3 SKY_COLOUR(0.8, 1, 1);
-
-const float ASPECT = static_cast<float>(WIDTH) / static_cast<float>(HEIGHT);  //static cast is used to stop integer division. WIDTH and HEIGHT are defined in gpu/dispatch.cu
 
 const std::string CAPTION = "ray tracer";
 
@@ -38,101 +35,6 @@ float host_rng(float min, float max) {
 
     return min + normalised * (max - min);
 }
-
-
-class Camera {
-    public:
-        CamData gpu_struct;
-
-        Camera() {
-            assign_default();
-
-            gpu_struct = create_gpu_struct();
-        }
-
-    private:
-        Vec3 cam_pos;
-        float fov;
-        float focal_len;
-
-        //rotation about each axis
-        float x_rot;
-        float y_rot;
-        float z_rot;
-
-        void assign_default() {
-            //these values can be changed
-            cam_pos.x = 0;
-            cam_pos.y = 0;
-            cam_pos.z = 0;
-
-            fov = 60 * (PI / 180);
-            focal_len = 0.1;
-
-            x_rot = 0 * (PI / 180);
-            y_rot = 0 * (PI / 180);
-            z_rot = 0 * (PI / 180);
-        }
-
-        Vec3 rotate_point(Vec3 point) {
-            //use the matrix operations from object.cu to rotate a point
-            std::vector<std::vector<float>> point_items = {{point.x}, {point.y}, {point.z}};
-            Matrix rotated_point = RotationMatrix(RotationMatrix::X_AXIS, x_rot) * RotationMatrix(RotationMatrix::Y_AXIS, y_rot) * RotationMatrix(RotationMatrix::Z_AXIS, z_rot) * Matrix(point_items);
-
-            return Vec3(rotated_point.items[0][0], rotated_point.items[1][0], rotated_point.items[2][0]);
-        }
-
-        Vec3 get_u(float viewport_width) {
-            //u is across the top of the screen, pointing left
-            Vec3 default_point(1, 0, 0);
-            Vec3 rotated_point = rotate_point(default_point);
-
-            Vec3 u = rotated_point - Vec3(0, 0, 0);
-
-            float mag_u = viewport_width / WIDTH;
-
-            u.set_mag(mag_u);
-
-            return u;
-        }
-
-        Vec3 get_v(float viewport_height) {
-            //v is down the left of the screen, pointing down
-            Vec3 default_point(0, -1, 0);
-            Vec3 rotated_point = rotate_point(default_point);
-
-            Vec3 v = rotated_point - Vec3(0, 0, 0);
-
-            float mag_v = viewport_height / HEIGHT;
-
-            v.set_mag(mag_v);
-
-            return v;
-        }
-
-        Vec3 get_tl_pos(Vec3 u, Vec3 v) {
-            //get the world position of the top left of the screen
-            Vec3 z_offset(0, 0, cam_pos.z + focal_len);
-            Vec3 u_step = u * -WIDTH / 2;
-            Vec3 v_step = v * -HEIGHT / 2;
-
-            return u_step + v_step + z_offset;
-        }
-
-        CamData create_gpu_struct() {
-            float viewport_width = 2 * focal_len * tan(fov / 2);
-            float viewport_height = viewport_width / ASPECT;
-        
-            //relative from top left
-            Vec3 u = get_u(viewport_width);
-            Vec3 v = get_v(viewport_height);
-
-            //set top left pos
-            Vec3 tl_pos = get_tl_pos(u, v);
-
-            return CamData{cam_pos, tl_pos, focal_len, u, v, WIDTH, HEIGHT};
-        }
-};
 
 
 class ImageTexture {
@@ -252,7 +154,7 @@ class SceneObjects {
             Texture monkey_tex = Texture::create_const_colour(Vec3(1, 1, 1));
             Material monkey_mat = Material::create_standard(monkey_tex, 0);
 
-            ObjFileMesh m("low_poly_monkey.obj");
+            ObjFileMesh m("models/low_poly_monkey.obj");
             m.enlarge(0.3);
             m.rotate(0, 2.3, 0);
             m.translate(0.1, -0.1, 1.6);
@@ -440,12 +342,12 @@ std::vector<float> get_pixel_colours(VariableRenderData *render_data) {
 
 std::vector<sf::Uint8> parse_pixel_colours(std::vector<float> pixel_colours) {
     //turn array of rgb floats between 0 and 1 into something that can be drawn
-    std::vector<sf::Uint8> parsed_pixel_colours(WIDTH * HEIGHT * 4);
+    std::vector<sf::Uint8> parsed_pixel_colours(SCREEN_WIDTH * SCREEN_HEIGHT * 4);
 
-    for (int x = 0; x < WIDTH; x++) {
-        for (int y = 0; y < HEIGHT; y++) {
-            int pixel_colour_inx = (y * WIDTH + x) * 3;
-            int result_inx = (y * WIDTH + x) * 4;
+    for (int x = 0; x < SCREEN_WIDTH; x++) {
+        for (int y = 0; y < SCREEN_HEIGHT; y++) {
+            int pixel_colour_inx = (y * SCREEN_WIDTH + x) * 3;
+            int result_inx = (y * SCREEN_WIDTH + x) * 4;
 
             //add the rgb colours
             for (int i = 0; i < 3; i++) {
@@ -474,7 +376,7 @@ void draw_screen(sf::RenderWindow *window, std::vector<float> pixel_colours) {
 
     //create a texture continaing the pixel colours
     sf::Texture texture;
-    texture.create(WIDTH, HEIGHT);
+    texture.create(SCREEN_WIDTH, SCREEN_HEIGHT);
     texture.update(rgba_colours.data());
 
     sf::Sprite sprite(texture);
@@ -485,18 +387,21 @@ void draw_screen(sf::RenderWindow *window, std::vector<float> pixel_colours) {
 
 
 void init() {
-    Camera cam_data;
+    Camera camera;
+
+    camera.assign_constant_mem();
+    
     SceneObjects mesh_data(SCENE_NUM);
     RenderSettings render_data(mesh_data.use_sky);
 
-    allocate_constant_mem(cam_data.gpu_struct, render_data.gpu_struct, mesh_data.gpu_struct);
+    allocate_constant_mem(render_data.gpu_struct, mesh_data.gpu_struct);
 }
 
 
 int main() {
     init();
 
-    sf::VideoMode dims(WIDTH, HEIGHT);
+    sf::VideoMode dims(SCREEN_WIDTH, SCREEN_HEIGHT);
     sf::RenderWindow window(dims, CAPTION);
 
     VariableRenderData render_data{0, std::vector<float>(PIXEL_ARRAY_LEN, 0)};

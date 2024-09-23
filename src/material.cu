@@ -1,5 +1,4 @@
-#include "utils.cu"
-#include <vector>
+#include "matrix.cu"
 
 
 __host__ __device__ class Texture {
