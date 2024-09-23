@@ -31,12 +31,12 @@ __device__ Vec3 cam_pixel_to_world(int x, int y) {
 
 __host__ __device__ class Camera {
     //these values can be changed
-    const Vec3 CAM_POS = Vec3(0, 1.9, 0);
+    const Vec3 CAM_POS = Vec3(0, 2, 0);
 
     const float FOV = 60 * (PI / 180);
     const float FOCAL_LEN = 0.1;
 
-    const float X_ROT = -50 * (PI / 180);
+    const float X_ROT = -40 * (PI / 180);
     const float Y_ROT = 0 * (PI / 180);
     const float Z_ROT = 0 * (PI / 180);
 
@@ -49,7 +49,10 @@ __host__ __device__ class Camera {
 
             Vec3 delta_u = get_u(viewport_width);
             Vec3 delta_v = get_v(viewport_height);
-            Vec3 tl_pos = get_tl_pos(delta_u, delta_v);
+
+            Vec3 plane_normal = delta_v.cross(delta_u).normalised();  //doing it this way around ensures the normal points away from the camera origin point (right hand rule)
+
+            Vec3 tl_pos = get_tl_pos(delta_u, delta_v, plane_normal);
 
             DeviceCamData cam_data{CAM_POS, tl_pos, delta_u, delta_v};
             
@@ -93,12 +96,14 @@ __host__ __device__ class Camera {
             return v;
         }
 
-        __host__ Vec3 get_tl_pos(Vec3 delta_u, Vec3 delta_v) {
+        __host__ Vec3 get_tl_pos(Vec3 delta_u, Vec3 delta_v, Vec3 plane_normal) {
             //get the world position of the top left of the screen
-            Vec3 offset(CAM_POS.x, CAM_POS.y, CAM_POS.z + FOCAL_LEN);
             Vec3 u_step = delta_u * -SCREEN_WIDTH / 2;
             Vec3 v_step = delta_v * -SCREEN_HEIGHT / 2;
 
-            return u_step + v_step + offset;
+            float mag = FOCAL_LEN;
+            Vec3 focal_len_offset = plane_normal * mag + CAM_POS;            
+
+            return u_step + v_step + focal_len_offset;
         }
 };
