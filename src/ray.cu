@@ -40,7 +40,7 @@ __device__ class Ray {
         int pixel_y;
 
         Vec3 origin;
-        Vec3 direction;
+        Vec3 direction;  //NOTE: this must be a normalised vector
 
         uint *rng_state;
 
@@ -68,7 +68,7 @@ __device__ class Ray {
             Vec3 diffuse_dir = true_lambertian_reflect(hit_data);
             Vec3 specular_dir = perfect_reflect(hit_data);
 
-            direction = lerp(diffuse_dir, specular_dir, obj_material.smoothness);
+            direction = lerp(diffuse_dir, specular_dir, obj_material.smoothness).normalised();
             origin = hit_data->hit_point;
         }
 
@@ -95,9 +95,9 @@ __device__ class Ray {
 
             current_refractive_index = n2;
 
-            //snell's law (https://en.wikipedia.org/wiki/Snell%27s_law)
-            float theta1 = acos(direction.dot(reference_normal));
-            float theta2 = asin(n1 * sin(theta1) / n2);
+            //snell's law (https://en.wikipedia.org/wiki/Snell%27s_law). NOTE: the min() is used to correct floating point errors
+            float theta1 = acos(min(direction.dot(reference_normal), 1.0));
+            float theta2 = asin(min(n1 * sin(theta1) / n2, 1.0));
 
             float ciritical_angle = asin(n2 / n1);
 
@@ -110,7 +110,14 @@ __device__ class Ray {
             }
 
             //use the vector geometry explained here: https://www.scratchapixel.com/lessons/3d-basic-rendering/introduction-to-shading/reflection-refraction-fresnel.html
-            Vec3 perp_component = (direction - reference_normal * cos(theta1)) / sin(theta1);
+            Vec3 perp_component;
+            if (theta1 != 0) {
+                perp_component = (direction - reference_normal * cos(theta1)) / sin(theta1);
+            } else {
+                //special case where the ray is incident normally
+                perp_component = Vec3(0, 0, 0);
+            }
+
             Vec3 resultant_refract = reference_normal * cos(theta2) + perp_component * sin(theta2);
 
             direction = resultant_refract.normalised();
@@ -128,6 +135,8 @@ __device__ class Ray {
             direction.x += x_offset;
             direction.y += y_offset;
             direction.z += z_offset;
+
+            direction = direction.normalised();
         }
     
     private:
