@@ -1,4 +1,6 @@
 #include <cmath>
+#include <tuple>
+
 #include "ray.cu"
 
 
@@ -394,18 +396,66 @@ __host__ __device__ class BoundingBox {
 
         Cuboid cuboid;
 
-        __host__ BoundingBox() {}
+        Triangle *device_triangle_pointers;
 
-        __host__ BoundingBox(Vec3 tl_near_pos, float w, float h, float d) {
-            tl_near = tl_near_pos;
-            width = w;
-            height = h;
-            depth = d;
+        __host__ BoundingBox() {
+            assigned = false;
 
-            Texture t = Texture::create_const_colour(Vec3(0, 0, 0));
-            Material m = Material::create_standard(t, 0);
+            width = 0;
+            height = 0;
+            depth = 0;
+        }
 
-            cuboid = Cuboid(tl_near, width, height, depth, m);
+        __host__ void grow(Triangle host_triangle, Triangle *device_pointer) {
+            //increase the bounding box size to include the new triangle
+            for (int i = 0; i < 3; i++) {
+                Vec3 new_point = host_triangle.points[i];
+
+                if (!assigned) {
+                    tl_near = new_point;
+                    assigned = true;
+
+                    return;
+                }
+
+                Vec3 diff = tl_near - new_point;
+
+                //update top left point (if point is too far left/up/near)
+                if (diff.x > 0) {
+                    width += diff.x;
+                    tl_near.x -= diff.x;
+                }
+                if (diff.y < 0) {
+                    height -= diff.y;
+                    tl_near.y -= diff.y;
+                }
+                if (diff.z > 0) {
+                    depth += diff.z;
+                    tl_near.z -= diff.z;
+                }
+
+                //update dimensions (if point is too far right/down/far)
+                if (-diff.x > width) {width = -diff.x;}
+                if (diff.y > height) {height = diff.y;}
+                if (-diff.z > depth) {depth = -diff.z;}
+
+                assign_cuboid();
+            }
+            
+            stored_triangles.push_back(device_pointer);
+        }
+
+        __host__ void allocate_memory() {
+            //allocate the stored triangles to the device memory
+            int mem_size = stored_triangles.size() * sizeof(Triangle*);
+
+            cudaError_t error = cudaMalloc((void **)&device_triangle_pointers, mem_size);  //allocate the memory
+            check_cuda_error(error);
+
+            Triangle **triangles = &stored_triangles[0];  //get the pointer to the underlying array
+            
+            error = cudaMemcpy(device_triangle_pointers, triangles, mem_size, cudaMemcpyHostToDevice);  //copy the value over
+            check_cuda_error(error);
         }
 
         __device__ bool ray_hits(Ray *ray) {
@@ -413,6 +463,160 @@ __host__ __device__ class BoundingBox {
             RayHitData hit_data = cuboid.hit(ray);
 
             return hit_data.ray_hits;
+        }
+    
+    private:
+        bool assigned;
+
+        std::vector<Triangle*> stored_triangles;
+
+        __host__ void assign_cuboid() {
+            //the texture and mat are not actually used
+            Texture t = Texture::create_const_colour(Vec3(0, 0, 0));
+            Material m = Material::create_standard(t, 0);
+
+            cuboid = Cuboid(tl_near, width, height, depth, m);
+        }
+};
+
+
+__host__ __device__ class BVH {
+    public:
+        __host__ BVH() {}
+
+        __host__ BVH(std::vector<Triangle> host_triangles, std::vector<Triangle*> device_triangles, int max_depth) {
+            root_node_inx = build(host_triangles, device_triangles, max_depth);
+            printf("built");
+        }
+
+    private:
+        int root_node_inx;
+
+        std::vector<BoundingBox> data_array;
+        std::vector<int> left_pointer;
+        std::vector<int> right_pointer;
+
+        __host__ int build(std::vector<Triangle> host_triangles, std::vector<Triangle*> device_triangles, int depth) {
+            //build a binary search tree of bounding boxes to form a BVH
+            BoundingBox current_box;
+
+            for (int i = 0; i < host_triangles.size(); i++) {
+                current_box.grow(host_triangles[i], device_triangles[i]);
+            }
+
+            if (depth <= 0) {
+                //this is a leaf node
+                add_tree_node(current_box, -1, -1);
+                return data_array.size() - 1;
+            }
+
+            Vec3 ref_point = get_ref_point(current_box, depth % 2 == 0);
+
+            //get the distances from each triangle to the reference point
+            std::vector<std::tuple<Triangle, Triangle*, float>> triangle_dists;
+            for (int i = 0; i < host_triangles.size(); i++) {
+                float dist = (host_triangles[i].points[0] - ref_point).magnitude();
+
+                std::tuple<Triangle, Triangle*, float> values = std::make_tuple(host_triangles[i], device_triangles[i], dist);
+
+                triangle_dists.push_back(values);
+            }
+
+            std::vector<std::tuple<Triangle, Triangle*, float>> sorted_tris = sort_triangles(triangle_dists);
+
+            //closest half go to the left, furthest half go right
+            std::vector<Triangle> left_host;
+            std::vector<Triangle*> left_device;
+            std::vector<Triangle> right_host;
+            std::vector<Triangle*> right_device;
+
+            int mid = host_triangles.size() / 2;
+
+            for (int i = 0; i < host_triangles.size(); i++) {
+                if (i <= mid) {
+                    left_host.push_back(host_triangles[i]);
+                    left_device.push_back(device_triangles[i]);
+                } else {
+                    right_host.push_back(host_triangles[i]);
+                    right_device.push_back(device_triangles[i]);
+                }
+            }
+
+            int left_pointer = build(left_host, left_device, depth - 1);
+            int right_pointer = build(right_host, right_device, depth - 1);
+
+            add_tree_node(current_box, left_pointer, right_pointer);
+
+            return data_array.size();
+        }
+
+        __host__ Vec3 get_ref_point(BoundingBox current_box, bool horizontal_split) {
+            if (horizontal_split) {
+                //we want the center of the top plane
+                return Vec3(current_box.tl_near.x + current_box.width / 2, current_box.tl_near.y, current_box.tl_near.z + current_box.depth / 2);
+            } else {
+                //we want the center of the left plane
+                return Vec3(current_box.tl_near.x, current_box.tl_near.y - current_box.height / 2, current_box.tl_near.z + current_box.depth / 2);
+            }
+        }
+
+        __host__ void add_tree_node(BoundingBox node, int left, int right) {
+            data_array.push_back(node);
+            left_pointer.push_back(left);
+            right_pointer.push_back(right);
+        }
+
+        __host__ std::vector<std::tuple<Triangle, Triangle*, float>> sort_triangles(std::vector<std::tuple<Triangle, Triangle*, float>> triangles) {
+            //perform a merge sort on the triangles based on their distance from the reference point
+            int len = triangles.size();
+            
+            if (len <= 1) {
+                return triangles;
+            }
+
+            int mid = len / 2;
+
+            std::vector<std::tuple<Triangle, Triangle*, float>> left;
+            std::vector<std::tuple<Triangle, Triangle*, float>> right;
+
+            for (int i = 0; i < len; i++) {
+                if (i < mid) {
+                    left.push_back(triangles[i]);
+                } else {
+                    right.push_back(triangles[i]);
+                }
+            }
+
+            std::vector<std::tuple<Triangle, Triangle*, float>> sorted_left = sort_triangles(left);
+            std::vector<std::tuple<Triangle, Triangle*, float>> sorted_right = sort_triangles(right);
+
+            int l_inx = 0;
+            int r_inx = 0;
+
+            std::vector<std::tuple<Triangle, Triangle*, float>> sorted_triangles;
+
+            for (int _ = 0; _ < len; _++) {
+                bool add_left;
+
+                if (l_inx >= left.size() - 1) {
+                    add_left = false;
+                } else if (r_inx >= right.size() - 1) {
+                    add_left = true;
+                } else {
+                    //choose the smallest value
+                    add_left = std::get<2>(sorted_left[l_inx]) < std::get<2>(sorted_right[r_inx]);
+                }
+
+                if (add_left) {
+                    sorted_triangles.push_back(sorted_left[l_inx]);
+                    l_inx++;
+                } else {
+                    sorted_triangles.push_back(sorted_right[r_inx]);
+                    r_inx++;
+                }
+            }
+
+            return sorted_triangles;
         }
 };
 
@@ -427,13 +631,13 @@ __host__ __device__ class Mesh {
 
             num_triangles = host_triangle_array.size();
 
-            get_bounding_box();
+            assign_bvh();
         }
 
         __device__ RayHitData hit(Ray *ray) {
             RayHitData closest_hit{false, INF};
 
-            if (!bounding_box.ray_hits(ray)) {return closest_hit;}  //ray is never going to hit
+            //if (!bounding_box.ray_hits(ray)) {return closest_hit;}  //ray is never going to hit
 
             for (int i = 0; i < num_triangles; i++) {
                 RayHitData hit_data = device_triangles[i].hit(ray);
@@ -447,48 +651,19 @@ __host__ __device__ class Mesh {
     private:
         int num_triangles;
 
-        Triangle *device_triangles;
         std::vector<Triangle> host_triangles;
+        Triangle *device_triangles;
 
-        BoundingBox bounding_box;
+        BVH bvh;
 
-        __host__ void get_bounding_box() {
-            if (num_triangles == 0) {return;}  //0 triangles will cause errors
+        __host__ void assign_bvh() {
+            std::vector<Triangle*> device_pointers;
 
-            float width = 0;
-            float height = 0;
-            float depth = 0;
-
-            Vec3 tl = host_triangles[0].points[0];
-            
-            //loop through all triangles and update the bounds (it's ok that this is slow because it is done once before the first render)
-            for (int i = 0; i < num_triangles; i++) {
-                for (int x = 0; x < 3; x++) {
-                    Vec3 point = host_triangles[i].points[x];
-                    Vec3 diff = tl - point;
-
-                    //update top left point (if point is too far left/up/near)
-                    if (diff.x > 0) {
-                        width += diff.x;
-                        tl.x -= diff.x;
-                    }
-                    if (diff.y < 0) {
-                        height -= diff.y;
-                        tl.y -= diff.y;
-                    }
-                    if (diff.z > 0) {
-                        depth += diff.z;
-                        tl.z -= diff.z;
-                    }
-
-                    //update dimensions (if point is too far right/down/far)
-                    if (-diff.x > width) {width = -diff.x;}
-                    if (diff.y > height) {height = diff.y;}
-                    if (-diff.z > depth) {depth = -diff.z;}
-                }
+            for (int i = 0; i < host_triangles.size(); i++) {
+                device_pointers.push_back(&device_triangles[i]);
             }
 
-            bounding_box = BoundingBox(tl, width, height, depth);
+            bvh = BVH(host_triangles, device_pointers, 4);
         }
 };
 
