@@ -501,6 +501,12 @@ __host__ __device__ class BVH {
             allocate_mem();
 
             printf("built\n");
+
+            printf("root: %u\n", root_node_inx);
+
+            for (int i = 0; i < data_array.size(); i++) {
+                printf("inx: %u data: %f,%f,%f left:%u right:%u\n", i, data_array[i].tl_near.x, data_array[i].tl_near.y, data_array[i].tl_near.z, left_pointer[i], right_pointer[i]);
+            }
         }
 
         __device__ RayHitData hit(Ray *ray) {
@@ -528,19 +534,19 @@ __host__ __device__ class BVH {
             int l_inx = device_left_pointer[node_inx];
             int r_inx = device_right_pointer[node_inx];
 
-            if (l_inx == r_inx == -1) {
+            if (l_inx == -1 && r_inx == -1) {
                 //leaf node
                 return check_leaf_node(ray, &device_data_array[node_inx]);
             }
 
-            //TODO: replace recursion with iteration (because weird stack things are happening)
+            //TODO: replace recursion with iteration (because I get a weird warning)
 
             RayHitData l_hit = traverse(ray, l_inx);
             RayHitData r_hit = traverse(ray, r_inx);
 
             if (l_hit.ray_hits && (l_hit.ray_travelled_dist <= r_hit.ray_travelled_dist)) {
                 return l_hit;
-            } else if (r_hit.ray_hits && (r_hit.ray_travelled_dist < l_hit.ray_travelled_dist)) {
+            } else if (r_hit.ray_hits && (r_hit.ray_travelled_dist <= l_hit.ray_travelled_dist)) {
                 return r_hit;
             } else {
                 return RayHitData{false, INF};  //no hit at all
