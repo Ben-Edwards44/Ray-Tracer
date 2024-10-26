@@ -693,7 +693,7 @@ __host__ __device__ class BVH {
             error = cudaMalloc((void **)&device_left_pointer, pointer_mem_size);
             check_cuda_error(error, "allocating bvh left pointer memory");
 
-            error = cudaMalloc((void **)&device_left_pointer, pointer_mem_size);
+            error = cudaMalloc((void **)&device_right_pointer, pointer_mem_size);
             check_cuda_error(error, "allocating bvh right pointer memory");
 
             //get the pointers to the underlying arrays
@@ -709,7 +709,7 @@ __host__ __device__ class BVH {
             check_cuda_error(error, "copying bvh left pointers");
 
             error = cudaMemcpy(device_right_pointer, right, pointer_mem_size, cudaMemcpyHostToDevice);
-            check_cuda_error(error, "copying right pointers");
+            check_cuda_error(error, "copying bvh right pointers");
         }
 };
 
