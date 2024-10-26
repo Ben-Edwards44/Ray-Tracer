@@ -32,7 +32,7 @@ class ReadWriteDeviceArray {
         void allocate_unified_mem() {
             //allocate memory that can be accessed by both the gpu and cpu
             cudaError_t error = cudaMallocManaged(&array, mem_size);
-            check_cuda_error(error);
+            check_cuda_error(error, "allocating unified memory");
         }
 };
 
@@ -60,12 +60,12 @@ class ReadOnlyDeviceArray {
 
         void allocate_mem() {
             cudaError_t error = cudaMalloc((void **)&device_pointer, mem_size);  //allocate the memory
-            check_cuda_error(error);
+            check_cuda_error(error, "allocating read only device array");
             
             T *host_array = &host_values[0];  //get the pointer to the underlying array
 
             error = cudaMemcpy(device_pointer, host_array, mem_size, cudaMemcpyHostToDevice);  //copy the value over
-            check_cuda_error(error);
+            check_cuda_error(error, "copying real only device array");
         }
 };
 
@@ -93,10 +93,10 @@ class ReadOnlyDeviceValue {
 
         void allocate_mem() {
             cudaError_t error = cudaMalloc((void **)&device_pointer, mem_size);  //allocate the memory
-            check_cuda_error(error);
+            check_cuda_error(error, "allocating read only device value");
             
             error = cudaMemcpy(device_pointer, host_value, mem_size, cudaMemcpyHostToDevice);  //copy the value over
-            check_cuda_error(error);
+            check_cuda_error(error, "copying read only device value");
         }
 };
 
@@ -159,5 +159,5 @@ void render(VariableRenderData *data, int current_time_ms) {
     data->frame_num++;
 
     cudaError_t error = cudaPeekAtLastError();
-    check_cuda_error(error);
+    check_cuda_error(error, "final check after render");
 }

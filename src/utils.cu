@@ -2,10 +2,10 @@
 #include <stdexcept>
 
 
-__host__ void check_cuda_error(cudaError_t error) {
+__host__ void check_cuda_error(cudaError_t error, std::string msg) {
     if (error != cudaSuccess) {
         std::string err_msg = cudaGetErrorString(error);
-        throw std::runtime_error("Error from CUDA: " + err_msg);
+        throw std::runtime_error("Error from CUDA (" + msg + "): " + err_msg);
     }
 }
 

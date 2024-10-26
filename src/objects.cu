@@ -453,12 +453,12 @@ __host__ __device__ class BoundingBox {
             int mem_size = stored_triangle_inxs.size() * sizeof(int);
 
             cudaError_t error = cudaMalloc((void **)&device_triangle_inxs, mem_size);  //allocate the memory
-            check_cuda_error(error);
+            check_cuda_error(error, "allocating bounding box triangles");
 
             int *triangles = &stored_triangle_inxs[0];  //get the pointer to the underlying array
             
             error = cudaMemcpy(device_triangle_inxs, triangles, mem_size, cudaMemcpyHostToDevice);  //copy the value over
-            check_cuda_error(error);
+            check_cuda_error(error, "copying bounding box triangles");
         }
 
         __device__ RayHitData ray_hits(Ray *ray) {
@@ -496,9 +496,16 @@ __host__ __device__ class BVH {
                 inxs.push_back(i);
             }
 
-            printf("sfgdkhldfg\n");
             root_node_inx = build(inxs, max_depth);
+
+            allocate_mem();
+
             printf("built\n");
+        }
+
+        __device__ RayHitData hit(Ray *ray) {
+            //traverse the tree and only check the triangles at the leaf nodes
+            return traverse(ray, root_node_inx);
         }
 
     private:
@@ -507,26 +514,29 @@ __host__ __device__ class BVH {
         std::vector<Triangle> host_triangles;
         Triangle* device_triangles;
 
+        //host
         std::vector<BoundingBox> data_array;
         std::vector<int> left_pointer;
         std::vector<int> right_pointer;
 
-        __device__ RayHitData hit(Ray *ray) {
-            //traverse the tree and only check the triangles at the leaf nodes
-            return traverse(ray, root_node_inx);
-        }
+        //device
+        BoundingBox *device_data_array;
+        int *device_left_pointer;
+        int *device_right_pointer;
 
         __device__ RayHitData traverse(Ray *ray, int node_inx) {
-            int l_inx = left_pointer[node_inx];
-            int r_inx = right_pointer[node_inx];
+            int l_inx = device_left_pointer[node_inx];
+            int r_inx = device_right_pointer[node_inx];
 
             if (l_inx == r_inx == -1) {
                 //leaf node
-                return check_leaf_node(ray, &data_array[node_inx]);
+                return check_leaf_node(ray, &device_data_array[node_inx]);
             }
 
-            RayHitData l_hit = data_array[l_inx].ray_hits(ray);
-            RayHitData r_hit = data_array[r_inx].ray_hits(ray);
+            //TODO: replace recursion with iteration (because weird stack things are happening)
+
+            RayHitData l_hit = traverse(ray, l_inx);
+            RayHitData r_hit = traverse(ray, r_inx);
 
             if (l_hit.ray_hits && (l_hit.ray_travelled_dist <= r_hit.ray_travelled_dist)) {
                 return l_hit;
@@ -670,6 +680,37 @@ __host__ __device__ class BVH {
 
             return sorted_triangles;
         }
+
+        __host__ void allocate_mem() {
+            //allocate the tree arrays to the device memory
+            int data_mem_size = data_array.size() * sizeof(BoundingBox);
+            int pointer_mem_size = left_pointer.size() * sizeof(int);
+
+            //allocate the memory
+            cudaError_t error = cudaMalloc((void **)&device_data_array, data_mem_size);
+            check_cuda_error(error, "allocating bvh data array memory");
+
+            error = cudaMalloc((void **)&device_left_pointer, pointer_mem_size);
+            check_cuda_error(error, "allocating bvh left pointer memory");
+
+            error = cudaMalloc((void **)&device_left_pointer, pointer_mem_size);
+            check_cuda_error(error, "allocating bvh right pointer memory");
+
+            //get the pointers to the underlying arrays
+            BoundingBox *data = &data_array[0];
+            int *left = &left_pointer[0];
+            int *right = &right_pointer[0];
+            
+            //copy the values over
+            error = cudaMemcpy(device_data_array, data, data_mem_size, cudaMemcpyHostToDevice);
+            check_cuda_error(error, "copying bvh data array");
+
+            error = cudaMemcpy(device_left_pointer, left, pointer_mem_size, cudaMemcpyHostToDevice);
+            check_cuda_error(error, "copying bvh left pointers");
+
+            error = cudaMemcpy(device_right_pointer, right, pointer_mem_size, cudaMemcpyHostToDevice);
+            check_cuda_error(error, "copying right pointers");
+        }
 };
 
 
@@ -687,6 +728,8 @@ __host__ __device__ class Mesh {
         }
 
         __device__ RayHitData hit(Ray *ray) {
+            return bvh.hit(ray);
+
             RayHitData closest_hit{false, INF};
 
             //if (!bounding_box.ray_hits(ray)) {return closest_hit;}  //ray is never going to hit

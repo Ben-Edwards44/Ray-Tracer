@@ -108,12 +108,12 @@ __host__ __device__ class Texture {
             int size = sizeof(rgb_values[0]) * rgb_values.size();
 
             cudaError_t error = cudaMalloc((void **)&img_rgb, size);  //allocate the memory
-            check_cuda_error(error);
+            check_cuda_error(error, "allocating texture rgb values");
 
             Vec3 *rgb_array = &rgb_values[0];  //get the pointer to the underlying array
 
             error = cudaMemcpy(img_rgb, rgb_array, size, cudaMemcpyHostToDevice);  //copy the data over
-            check_cuda_error(error);
+            check_cuda_error(error, "copying texture rgb values");
         }
 
         __device__ Vec3 image(float u, float v) {
