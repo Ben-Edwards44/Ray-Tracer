@@ -107,6 +107,10 @@ __host__ __device__ class Vec3 {
             return this;
         }
 
+        __device__ bool operator==(Vec3 other_vec) {
+            return x == other_vec.x && y == other_vec.y && z == other_vec.z;
+        }
+
         __host__ __device__ float magnitude() {
             float mag_sq = x * x + y * y + z * z;
             return sqrt(mag_sq);
@@ -180,10 +184,6 @@ __host__ __device__ class Vec2 {
 template <typename T>
 __host__ __device__ class DeviceStack {
     public:
-        T *items;
-
-        int top = -1;
-
         __host__ DeviceStack() {}
 
         __device__ void push(T item) {
@@ -198,6 +198,14 @@ __host__ __device__ class DeviceStack {
             return item;
         }
 
+        __device__ void empty() {
+            top = -1;
+        }
+
+        __device__ bool is_empty() {
+            return top == -1;
+        } 
+
         __host__ void allocate_mem(int max_size) {
             int mem_size = max_size * sizeof(T);
 
@@ -205,6 +213,10 @@ __host__ __device__ class DeviceStack {
             cudaError_t error = cudaMalloc((void **)&items, mem_size);
             check_cuda_error(error, "allocating stack memory");
         }
+
+    private:
+        int top;
+        T *items;
 };
 
 
