@@ -396,15 +396,9 @@ __host__ __device__ class BoundingBox {
 
         Cuboid cuboid;
 
-        int num_stored_triangles;
+        __host__ BoundingBox() {}
 
-        int *device_triangle_inxs;
-
-        __host__ BoundingBox() {
-            assigned = false;
-        }
-
-        __host__ void grow(int inx, Triangle triangle) {
+        __host__ void grow(Triangle triangle) {
             //increase the bounding box size to include the new triangle
             for (int i = 0; i < 3; i++) {
                 Vec3 new_point = triangle.points[i];
@@ -426,27 +420,8 @@ __host__ __device__ class BoundingBox {
                 br_far.y = min(br_far.y, new_point.y);
                 br_far.z = max(br_far.z, new_point.z);
             }
-            
-            stored_triangle_inxs.push_back(inx);
 
             assign_cuboid();
-        }
-
-        __host__ void allocate_memory() {
-            //allocate the stored triangles to the device memory
-            num_stored_triangles = stored_triangle_inxs.size();
-
-            printf("size: %u\n", num_stored_triangles);
-
-            int mem_size = stored_triangle_inxs.size() * sizeof(int);
-
-            cudaError_t error = cudaMalloc((void **)&device_triangle_inxs, mem_size);  //allocate the memory
-            check_cuda_error(error, "allocating bounding box triangles");
-
-            int *triangles = &stored_triangle_inxs[0];  //get the pointer to the underlying array
-            
-            error = cudaMemcpy(device_triangle_inxs, triangles, mem_size, cudaMemcpyHostToDevice);  //copy the value over
-            check_cuda_error(error, "copying bounding box triangles");
         }
 
         __device__ RayHitData ray_hits(Ray *ray) {
@@ -455,11 +430,9 @@ __host__ __device__ class BoundingBox {
 
             return hit_data;
         }
-    
-    private:
-        bool assigned;
 
-        std::vector<int> stored_triangle_inxs;
+    private:
+        bool assigned = false;
 
         __host__ void assign_cuboid() {
             //the texture and mat are not actually used
@@ -474,6 +447,14 @@ __host__ __device__ class BoundingBox {
 
             cuboid = Cuboid(tl_near, width, height, depth, m);
         }
+};
+
+
+__host__ __device__ struct BoundingBoxTris {
+    BoundingBox box;
+
+    int num_tris;
+    int *device_tri_inxs;
 };
 
 
@@ -494,27 +475,17 @@ __host__ __device__ class BVH {
 
             num_tri = host_tris.size();
 
+            traverse_stack.allocate_mem(max_depth);
+
             std::vector<int> inxs;
             for (int i = 0; i < host_tris.size(); i++) {
                 inxs.push_back(i);
-                test.grow(i, host_tris[i]);
+                test.grow(host_tris[i]);
             }
-
-            printf("test: %f, %f, %f\n", test.tl_near.x, test.tl_near.y, test.tl_near.z);
-            printf("test: %f, %f, %f\n", test.br_far.x, test.br_far.y, test.br_far.z);
-            printf("test: %f, %f, %f\n", test.width, test.height, test.depth);
 
             root_node_inx = build(inxs, max_depth);
 
             allocate_mem();
-
-            printf("built\n");
-
-            printf("root: %u\n", root_node_inx);
-
-            for (int i = 0; i < data_array.size(); i++) {
-                printf("inx: %u data: %f,%f,%f left:%u right:%u\n", i, data_array[i].tl_near.x, data_array[i].tl_near.y, data_array[i].tl_near.z, left_pointer[i], right_pointer[i]);
-            }
         }
 
         __device__ RayHitData hit(Ray *ray) {
@@ -530,8 +501,8 @@ __host__ __device__ class BVH {
 
             //return closest_hit;
 
-            return device_data_array[device_left_pointer[root_node_inx]].ray_hits(ray);
-            //return traverse(ray, root_node_inx);
+            //return device_data_array[device_left_pointer[root_node_inx]].box.ray_hits(ray);
+            return traverse(ray, root_node_inx);
         }
 
     private:
@@ -541,44 +512,54 @@ __host__ __device__ class BVH {
         Triangle* device_triangles;
 
         //host
-        std::vector<BoundingBox> data_array;
+        std::vector<BoundingBoxTris> data_array;
         std::vector<int> left_pointer;
         std::vector<int> right_pointer;
 
         //device
-        BoundingBox *device_data_array;
+        BoundingBoxTris *device_data_array;
         int *device_left_pointer;
         int *device_right_pointer;
 
+        DeviceStack<int> traverse_stack;
+
         __device__ RayHitData traverse(Ray *ray, int node_inx) {
-            int l_inx = device_left_pointer[node_inx];
-            int r_inx = device_right_pointer[node_inx];
+            traverse_stack.empty();
 
-            if (l_inx == -1 && r_inx == -1) {
-                //leaf node
-                return check_leaf_node(ray, &device_data_array[node_inx]);
+            RayHitData root_hit = device_data_array[root_node_inx].box.ray_hits(ray);
+
+            if (root_hit.ray_hits) {traverse_stack.push(root_node_inx);}
+
+            while (!traverse_stack.is_empty()) {
+                int current_inx = traverse_stack.pop();
+
+                int left_inx = device_left_pointer[current_inx];
+                int right_inx = device_right_pointer[current_inx];
+
+                if (left_inx == -1 && right_inx == -1) {
+                    //leaf node
+                    return check_leaf_node(ray, device_data_array[current_inx]);
+                }
+
+                RayHitData l_hit = device_data_array[left_inx].box.ray_hits(ray);
+                RayHitData r_hit = device_data_array[right_inx].box.ray_hits(ray);
+
+                if (l_hit.ray_hits && (l_hit.ray_travelled_dist < r_hit.ray_travelled_dist)) {
+                    traverse_stack.push(left_inx);
+                } else {
+                    traverse_stack.push(right_inx);
+                }
             }
 
-            //TODO: replace recursion with iteration (because I get a weird warning)
-
-            RayHitData l_hit = traverse(ray, l_inx);
-            RayHitData r_hit = traverse(ray, r_inx);
-
-            if (l_hit.ray_hits && (l_hit.ray_travelled_dist <= r_hit.ray_travelled_dist)) {
-                return l_hit;
-            } else if (r_hit.ray_hits && (r_hit.ray_travelled_dist <= l_hit.ray_travelled_dist)) {
-                return r_hit;
-            } else {
-                return RayHitData{false, INF};  //no hit at all
-            }
+            return RayHitData{false, INF};
         }
 
-        __device__ RayHitData check_leaf_node(Ray *ray, BoundingBox *node) {
+        __device__ RayHitData check_leaf_node(Ray *ray, BoundingBoxTris node) {
             RayHitData closest_hit{false, INF};
 
-            for (int i = 0; i < node->num_stored_triangles; i++) {
-                printf("%u\n", i);
-                Triangle triangle = device_triangles[node->device_triangle_inxs[i]];
+            for (int i = 0; i < node.num_tris; i++) {
+                int inx = node.device_tri_inxs[i];
+                Triangle triangle = device_triangles[inx];
                 RayHitData hit_data = triangle.hit(ray);
 
                 if (hit_data.ray_hits && hit_data.ray_travelled_dist < closest_hit.ray_travelled_dist) {closest_hit = hit_data;}
@@ -592,12 +573,12 @@ __host__ __device__ class BVH {
             BoundingBox current_box;
 
             for (int i : triangle_inxs) {
-                current_box.grow(i, host_triangles[i]);
+                current_box.grow(host_triangles[i]);
             }
 
             if (depth <= 0) {
                 //this is a leaf node
-                add_tree_node(current_box, -1, -1);
+                add_tree_node(current_box, -1, -1, triangle_inxs);
                 return data_array.size() - 1;
             }
 
@@ -634,7 +615,7 @@ __host__ __device__ class BVH {
             int left_pointer = build(left, depth - 1);
             int right_pointer = build(right, depth - 1);
 
-            add_tree_node(current_box, left_pointer, right_pointer);
+            add_tree_node(current_box, left_pointer, right_pointer, triangle_inxs);
 
             return data_array.size() - 1;
         }
@@ -649,12 +630,24 @@ __host__ __device__ class BVH {
             }
         }
 
-        __host__ void add_tree_node(BoundingBox node, int left, int right) {
-            data_array.push_back(node);
+        __host__ void add_tree_node(BoundingBox node, int left, int right, std::vector<int> triangle_inxs) {
             left_pointer.push_back(left);
             right_pointer.push_back(right);
 
-            node.allocate_memory();
+            //allocate the memory for the BoundingBoxTris struct
+            BoundingBoxTris box{node, static_cast<int>(triangle_inxs.size())};
+
+            int mem_size = triangle_inxs.size() * sizeof(int);
+
+            cudaError_t error = cudaMalloc((void **)&box.device_tri_inxs, mem_size);
+            check_cuda_error(error, "allocating bvh node triangle inxs");
+
+            int *tri_inxs = &triangle_inxs[0];
+
+            error = cudaMemcpy(box.device_tri_inxs, tri_inxs, mem_size, cudaMemcpyHostToDevice);
+            check_cuda_error(error, "copying bvh node triangle inxs");
+
+            data_array.push_back(box);
         }
 
         __host__ std::vector<std::pair<int, float>> sort_triangles(std::vector<std::pair<int, float>> triangles) {
@@ -726,7 +719,7 @@ __host__ __device__ class BVH {
             check_cuda_error(error, "allocating bvh right pointer memory");
 
             //get the pointers to the underlying arrays
-            BoundingBox *data = &data_array[0];
+            BoundingBoxTris *data = &data_array[0];
             int *left = &left_pointer[0];
             int *right = &right_pointer[0];
             
@@ -753,7 +746,7 @@ __host__ __device__ class Mesh {
 
             num_triangles = host_triangle_array.size();
 
-            bvh = BVH(host_triangles, device_triangles, 2);
+            bvh = BVH(host_triangles, device_triangles, 1);
         }
 
         __device__ RayHitData hit(Ray *ray) {
