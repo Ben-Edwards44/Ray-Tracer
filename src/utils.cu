@@ -184,21 +184,21 @@ __host__ __device__ class DeviceStack {
 
         int top = -1;
 
-        __host__ Stack() {}
+        __host__ DeviceStack() {}
 
-        __device__ push(T item) {
+        __device__ void push(T item) {
             top++;
             items[top] = item;
         }
 
-        __device__ pop() {
+        __device__ T pop() {
             T item = items[top];
             top--;
 
             return item;
         }
 
-        __host__ allocate_mem(int max_size) {
+        __host__ void allocate_mem(int max_size) {
             int mem_size = max_size * sizeof(T);
 
             //allocate the memory
