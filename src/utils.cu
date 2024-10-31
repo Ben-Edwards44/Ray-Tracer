@@ -10,7 +10,7 @@ __host__ void check_cuda_error(cudaError_t error, std::string msg) {
 }
 
 
-class Vec3 {
+__host__ __device__ class Vec3 {
     public:
         float x;
         float y;
@@ -155,7 +155,7 @@ class Vec3 {
 };
 
 
-class Vec2 {
+__host__ __device__ class Vec2 {
     public:
         float x;
         float y;
@@ -173,6 +173,37 @@ class Vec2 {
 
         __device__ Vec2 operator*(float scalar) {
             return Vec2(x * scalar, y * scalar);
+        }
+};
+
+
+template <typename T>
+__host__ __device__ class DeviceStack {
+    public:
+        T *items;
+
+        int top = -1;
+
+        __host__ Stack() {}
+
+        __device__ push(T item) {
+            top++;
+            items[top] = item;
+        }
+
+        __device__ pop() {
+            T item = items[top];
+            top--;
+
+            return item;
+        }
+
+        __host__ allocate_mem(int max_size) {
+            int mem_size = max_size * sizeof(T);
+
+            //allocate the memory
+            cudaError_t error = cudaMalloc((void **)&items, mem_size);
+            check_cuda_error(error, "allocating stack memory");
         }
 };
 
