@@ -388,7 +388,8 @@ __host__ __device__ class Cuboid {
 __host__ __device__ class BoundingBox {
     public:
         Vec3 tl_near;
-        
+        Vec3 br_far;
+
         float width;
         float height;
         float depth;
@@ -401,10 +402,6 @@ __host__ __device__ class BoundingBox {
 
         __host__ BoundingBox() {
             assigned = false;
-
-            width = 0;
-            height = 0;
-            depth = 0;
         }
 
         __host__ void grow(int inx, Triangle triangle) {
@@ -414,41 +411,32 @@ __host__ __device__ class BoundingBox {
 
                 if (!assigned) {
                     tl_near = new_point;
+                    br_far = new_point;
+
                     assigned = true;
 
-                    return;
+                    continue;
                 }
 
-                Vec3 diff = tl_near - new_point;
+                tl_near.x = min(tl_near.x, new_point.x);
+                tl_near.y = max(tl_near.y, new_point.y);
+                tl_near.z = min(tl_near.z, new_point.z);
 
-                //update top left point (if point is too far left/up/near)
-                if (diff.x > 0) {
-                    width += diff.x;
-                    tl_near.x -= diff.x;
-                }
-                if (diff.y < 0) {
-                    height -= diff.y;
-                    tl_near.y -= diff.y;
-                }
-                if (diff.z > 0) {
-                    depth += diff.z;
-                    tl_near.z -= diff.z;
-                }
-
-                //update dimensions (if point is too far right/down/far)
-                if (-diff.x > width) {width = -diff.x;}
-                if (diff.y > height) {height = diff.y;}
-                if (-diff.z > depth) {depth = -diff.z;}
-
-                assign_cuboid();
+                br_far.x = max(br_far.x, new_point.x);
+                br_far.y = min(br_far.y, new_point.y);
+                br_far.z = max(br_far.z, new_point.z);
             }
             
             stored_triangle_inxs.push_back(inx);
+
+            assign_cuboid();
         }
 
         __host__ void allocate_memory() {
             //allocate the stored triangles to the device memory
             num_stored_triangles = stored_triangle_inxs.size();
+
+            printf("size: %u\n", num_stored_triangles);
 
             int mem_size = stored_triangle_inxs.size() * sizeof(int);
 
@@ -475,6 +463,12 @@ __host__ __device__ class BoundingBox {
 
         __host__ void assign_cuboid() {
             //the texture and mat are not actually used
+            Vec3 dims = br_far - tl_near;
+
+            width = dims.x;
+            height = -dims.y;
+            depth = dims.z;
+
             Texture t = Texture::create_const_colour(Vec3(0, 0, 0));
             Material m = Material::create_standard(t, 0);
 
@@ -487,14 +481,28 @@ __host__ __device__ class BVH {
     public:
         __host__ BVH() {}
 
+
+        //temp!!!!!
+        int num_tri;
+
+        BoundingBox test;
+
+
         __host__ BVH(std::vector<Triangle> host_tris, Triangle *device_tris, int max_depth) {
             host_triangles = host_tris;
             device_triangles = device_tris;
 
+            num_tri = host_tris.size();
+
             std::vector<int> inxs;
             for (int i = 0; i < host_tris.size(); i++) {
                 inxs.push_back(i);
+                test.grow(i, host_tris[i]);
             }
+
+            printf("test: %f, %f, %f\n", test.tl_near.x, test.tl_near.y, test.tl_near.z);
+            printf("test: %f, %f, %f\n", test.br_far.x, test.br_far.y, test.br_far.z);
+            printf("test: %f, %f, %f\n", test.width, test.height, test.depth);
 
             root_node_inx = build(inxs, max_depth);
 
@@ -511,7 +519,19 @@ __host__ __device__ class BVH {
 
         __device__ RayHitData hit(Ray *ray) {
             //traverse the tree and only check the triangles at the leaf nodes
-            return traverse(ray, root_node_inx);
+            RayHitData closest_hit{false, INF};
+
+            for (int i = 0; i < num_tri; i++) {
+                Triangle triangle = device_triangles[i];
+                RayHitData hit_data = triangle.hit(ray);
+
+                if (hit_data.ray_hits && hit_data.ray_travelled_dist < closest_hit.ray_travelled_dist) {closest_hit = hit_data;}
+            }
+
+            //return closest_hit;
+
+            return device_data_array[device_left_pointer[root_node_inx]].ray_hits(ray);
+            //return traverse(ray, root_node_inx);
         }
 
     private:
@@ -557,6 +577,7 @@ __host__ __device__ class BVH {
             RayHitData closest_hit{false, INF};
 
             for (int i = 0; i < node->num_stored_triangles; i++) {
+                printf("%u\n", i);
                 Triangle triangle = device_triangles[node->device_triangle_inxs[i]];
                 RayHitData hit_data = triangle.hit(ray);
 
@@ -615,7 +636,7 @@ __host__ __device__ class BVH {
 
             add_tree_node(current_box, left_pointer, right_pointer);
 
-            return data_array.size();
+            return data_array.size() - 1;
         }
 
         __host__ Vec3 get_ref_point(BoundingBox current_box, bool horizontal_split) {
@@ -632,6 +653,8 @@ __host__ __device__ class BVH {
             data_array.push_back(node);
             left_pointer.push_back(left);
             right_pointer.push_back(right);
+
+            node.allocate_memory();
         }
 
         __host__ std::vector<std::pair<int, float>> sort_triangles(std::vector<std::pair<int, float>> triangles) {
@@ -730,7 +753,7 @@ __host__ __device__ class Mesh {
 
             num_triangles = host_triangle_array.size();
 
-            bvh = BVH(host_triangles, device_triangles, 1);
+            bvh = BVH(host_triangles, device_triangles, 2);
         }
 
         __device__ RayHitData hit(Ray *ray) {
