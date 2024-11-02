@@ -387,8 +387,8 @@ __host__ __device__ class Cuboid {
 
 __host__ __device__ class BoundingBox {
     public:
-        Vec3 tl_near;
-        Vec3 br_far;
+        Vec3 bl_near;
+        Vec3 tr_far;
 
         float width;
         float height;
@@ -397,8 +397,8 @@ __host__ __device__ class BoundingBox {
         Cuboid cuboid;
 
         __host__ BoundingBox() {
-            tl_near = Vec3(0, 0, 0);
-            br_far = Vec3(0, 0, 0);
+            bl_near = Vec3(0, 0, 0);
+            tr_far = Vec3(0, 0, 0);
         }
 
         __host__ void grow(Triangle triangle) {
@@ -407,21 +407,21 @@ __host__ __device__ class BoundingBox {
                 Vec3 new_point = triangle.points[i];
 
                 if (!assigned) {
-                    tl_near = new_point;
-                    br_far = new_point;
+                    bl_near = new_point;
+                    tr_far = new_point;
 
                     assigned = true;
 
                     continue;
                 }
 
-                tl_near.x = min(tl_near.x, new_point.x);
-                tl_near.y = max(tl_near.y, new_point.y);
-                tl_near.z = min(tl_near.z, new_point.z);
+                bl_near.x = min(bl_near.x, new_point.x);
+                bl_near.y = min(bl_near.y, new_point.y);
+                bl_near.z = min(bl_near.z, new_point.z);
 
-                br_far.x = max(br_far.x, new_point.x);
-                br_far.y = min(br_far.y, new_point.y);
-                br_far.z = max(br_far.z, new_point.z);
+                tr_far.x = max(tr_far.x, new_point.x);
+                tr_far.y = max(tr_far.y, new_point.y);
+                tr_far.z = max(tr_far.z, new_point.z);
             }
 
             update_dimensions();
@@ -429,30 +429,45 @@ __host__ __device__ class BoundingBox {
 
         __host__ void update_dimensions() {
             //update the width, height, depth after the bounding box has grown
-            Vec3 dims = br_far - tl_near;
+            Vec3 dims = tr_far - bl_near;
 
             width = dims.x;
-            height = -dims.y;
+            height = dims.y;
             depth = dims.z;
         }
 
         __device__ RayHitData ray_hits(Ray *ray) {
-            //TODO: make more efficient
-            if (!assigned) {return RayHitData{false, INF};}  //the bounding box has zero volume
+            //https://tavianator.com/2022/ray_box_boundary.html
+            float tmin = 0;
+            float tmax = INF;
 
-            RayHitData hit_data = cuboid.hit(ray);
+            //x
+            float t1 = (bl_near.x - ray->origin.x) / ray->direction.x;
+            float t2 = (tr_far.x - ray->origin.x) / ray->direction.x;
 
-            return hit_data;
+            tmin = max(tmin, min(t1, t2));
+            tmax = min(tmax, max(t1, t2));
+
+            //y
+            t1 = (bl_near.y - ray->origin.y) / ray->direction.y;
+            t2 = (tr_far.y - ray->origin.y) / ray->direction.y;
+
+            tmin = max(tmin, min(t1, t2));
+            tmax = min(tmax, max(t1, t2));
+
+            //z
+            t1 = (bl_near.z - ray->origin.z) / ray->direction.z;
+            t2 = (tr_far.z - ray->origin.z) / ray->direction.z;
+
+            tmin = max(tmin, min(t1, t2));
+            tmax = min(tmax, max(t1, t2));
+
+            bool ray_hits = tmin < tmax && tmax > 0;
+            float ray_dist = INF;
+            if (ray_hits) {ray_dist = tmin;}
+
+            return RayHitData{ray_hits, ray_dist};  //we are only ever going to use the 1st two attrs (no need for the hit normal etc.)
         }
-
-        __host__ void assign_cuboid() {
-            //the texture and mat are not actually used
-            Texture t = Texture::create_const_colour(Vec3(0, 0, 0));
-            Material m = Material::create_standard(t, 0);
-
-            cuboid = Cuboid(tl_near, width, height, depth, m);
-        }
-
     private:
         bool assigned = false;
 };
@@ -490,13 +505,9 @@ __host__ __device__ class BVH {
 
             printf("built: %u\n", root_node_inx);
 
-            printf("tl: %f,%f,%f\n", data_array[root_node_inx].box.tl_near.x, data_array[root_node_inx].box.tl_near.y, data_array[root_node_inx].box.tl_near.z);
-            printf("d: %f,%f,%f\n", data_array[root_node_inx].box.width, data_array[root_node_inx].box.height, data_array[root_node_inx].box.depth);
-
             printf("tree:\n");
             for (int i = 0; i <= root_node_inx; i++) {
                 printf("\t%u\n", i);
-                printf("\t\tbb: %f,%f,%f\n", data_array[i].box.tl_near.x, data_array[i].box.tl_near.y, data_array[i].box.tl_near.z);
                 if (left_pointer[i] == -1) {printf("\t\ttris:%u\n", data_array[i].num_tris);}
             }
 
@@ -567,6 +578,7 @@ __host__ __device__ class BVH {
         int *device_right_pointer;
 
         __device__ int test_traverse(Ray *ray, int node_inx) {
+            //TODO: make sure stack is in registers or shared mem, not in vram!!!!!!!!!!!!!!!
             //perform a dfs of the tree (recursion does not play too well on the gpu, so an iterative method is used instead)
             DeviceStack<int> stack;
 
@@ -788,22 +800,20 @@ __host__ __device__ class BVH {
 
         __host__ Vec3 get_ref_point(BoundingBox current_box, int depth) {
             if (depth % 3 == 0) {
-                //we want the center of the top plane (hor split)
-                return Vec3(current_box.tl_near.x + current_box.width / 2, current_box.tl_near.y, current_box.tl_near.z + current_box.depth / 2);
+                //we want the center of the bottom plane (hor split)
+                return Vec3(current_box.bl_near.x + current_box.width / 2, current_box.bl_near.y, current_box.bl_near.z + current_box.depth / 2);
             } else if (depth % 3 == 1) {
                 //we want the center of the left plane (vert split)
-                return Vec3(current_box.tl_near.x, current_box.tl_near.y - current_box.height / 2, current_box.tl_near.z + current_box.depth / 2);
+                return Vec3(current_box.bl_near.x, current_box.bl_near.y + current_box.height / 2, current_box.bl_near.z + current_box.depth / 2);
             } else {
                 //we want the center of the front plane (z axis split)
-                return Vec3(current_box.tl_near.x + current_box.width / 2, current_box.tl_near.y - current_box.height / 2, current_box.tl_near.z);
+                return Vec3(current_box.bl_near.x + current_box.width / 2, current_box.bl_near.y + current_box.height / 2, current_box.bl_near.z);
             }
         }
 
         __host__ void add_tree_node(BoundingBox node, int left, int right, std::vector<int> triangle_inxs) {
             left_pointer.push_back(left);
             right_pointer.push_back(right);
-
-            node.assign_cuboid();
 
             //allocate the memory for the BoundingBoxTris struct
             BoundingBoxTris box{node, static_cast<int>(triangle_inxs.size())};
