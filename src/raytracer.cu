@@ -100,7 +100,7 @@ __device__ Vec3 test(Ray ray) {
 
 
 __device__ Vec3 get_ray_colour(Vec3 previous_colour, Ray ray, int frame_num) {
-    return test(ray);
+    //return test(ray);
 
     RayCollision hit = get_ray_collision(&ray);
 
