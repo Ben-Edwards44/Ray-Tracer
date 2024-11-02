@@ -396,7 +396,10 @@ __host__ __device__ class BoundingBox {
 
         Cuboid cuboid;
 
-        __host__ BoundingBox() {}
+        __host__ BoundingBox() {
+            tl_near = Vec3(0, 0, 0);
+            br_far = Vec3(0, 0, 0);
+        }
 
         __host__ void grow(Triangle triangle) {
             //increase the bounding box size to include the new triangle
@@ -421,32 +424,37 @@ __host__ __device__ class BoundingBox {
                 br_far.z = max(br_far.z, new_point.z);
             }
 
-            assign_cuboid();
+            update_dimensions();
         }
 
-        __device__ RayHitData ray_hits(Ray *ray) {
-            //TODO: make more efficient
-            RayHitData hit_data = cuboid.hit(ray);
-
-            return hit_data;
-        }
-
-    private:
-        bool assigned = false;
-
-        __host__ void assign_cuboid() {
-            //the texture and mat are not actually used
+        __host__ void update_dimensions() {
+            //update the width, height, depth after the bounding box has grown
             Vec3 dims = br_far - tl_near;
 
             width = dims.x;
             height = -dims.y;
             depth = dims.z;
+        }
 
+        __device__ RayHitData ray_hits(Ray *ray) {
+            //TODO: make more efficient
+            if (!assigned) {return RayHitData{false, INF};}  //the bounding box has zero volume
+
+            RayHitData hit_data = cuboid.hit(ray);
+
+            return hit_data;
+        }
+
+        __host__ void assign_cuboid() {
+            //the texture and mat are not actually used
             Texture t = Texture::create_const_colour(Vec3(0, 0, 0));
             Material m = Material::create_standard(t, 0);
 
             cuboid = Cuboid(tl_near, width, height, depth, m);
         }
+
+    private:
+        bool assigned = false;
 };
 
 
@@ -476,11 +484,21 @@ __host__ __device__ class BVH {
                 inxs.push_back(i);
             }
 
-            printf("num tris: %u\n", host_tris.size());
+            printf("num tris: %u\n", (int)host_tris.size());
 
             root_node_inx = build(inxs, max_depth);
 
             printf("built: %u\n", root_node_inx);
+
+            printf("tl: %f,%f,%f\n", data_array[root_node_inx].box.tl_near.x, data_array[root_node_inx].box.tl_near.y, data_array[root_node_inx].box.tl_near.z);
+            printf("d: %f,%f,%f\n", data_array[root_node_inx].box.width, data_array[root_node_inx].box.height, data_array[root_node_inx].box.depth);
+
+            printf("tree:\n");
+            for (int i = 0; i <= root_node_inx; i++) {
+                printf("\t%u\n", i);
+                printf("\t\tbb: %f,%f,%f\n", data_array[i].box.tl_near.x, data_array[i].box.tl_near.y, data_array[i].box.tl_near.z);
+                if (left_pointer[i] == -1) {printf("\t\ttris:%u\n", data_array[i].num_tris);}
+            }
 
             allocate_mem();
         }
@@ -496,13 +514,26 @@ __host__ __device__ class BVH {
             }
 
             RayHitData act = closest_hit;
-            RayHitData got = traverse(ray, root_node_inx);
+            //RayHitData got = traverse(ray, root_node_inx);
 
-            if (got.hit_point == act.hit_point) {
-                return Vec3(1, 1, 1);
-            } else {
-                return Vec3(1, 0, 0);
-            }
+            //if (!act.ray_hits) {return Vec3(0, 0, 1);}
+
+            int b = traverse(ray, root_node_inx);
+
+            //if (b != 0) {
+            //    printf("tests: %u\n", b);
+            //}
+
+            float c = (float)b / 20.0;
+
+            return Vec3(c, c, c);
+
+            //if (got.hit_point == act.hit_point) {
+            //    return Vec3(1, 1, 1);
+            //} else {
+            //    //printf("wanted: %f, %f, %f. Got: %f, %f, %f\n", act.hit_point.x, act.hit_point.y, act.hit_point.z, got.hit_point.x, got.hit_point.y, got.hit_point.z);
+            //    return Vec3(1, 0, 0);
+            //}
 
             //if (got_inx == -1) {
             //    return Vec3(1, 0, 0);
@@ -514,7 +545,7 @@ __host__ __device__ class BVH {
 
         __device__ RayHitData hit(Ray *ray) {
             //traverse the tree and only check the triangles at the leaf nodes
-            return traverse(ray, root_node_inx);
+            return RayHitData{false, INF};//traverse(ray, root_node_inx);
         }
 
     private:
@@ -533,14 +564,18 @@ __host__ __device__ class BVH {
         int *device_left_pointer;
         int *device_right_pointer;
 
-        __device__ RayHitData traverse(Ray *ray, int node_inx) {
+        __device__ int traverse(Ray *ray, int node_inx) {
             //perform a dfs of the tree (recursion does not play too well on the gpu, so an iterative method is used instead)
             DeviceStack<int> stack;
 
             RayHitData best_hit{false, INF};
 
+            //printf("hkjlasdf\n");
+
             bool root_hit = device_data_array[node_inx].box.ray_hits(ray).ray_hits;
             if (root_hit) {stack.push(node_inx);}
+
+            int stats = 0;
 
             while (!stack.is_empty()) {
                 int current_inx = stack.pop();
@@ -548,8 +583,14 @@ __host__ __device__ class BVH {
                 int l = device_left_pointer[current_inx];
                 int r = device_right_pointer[current_inx];
 
+                //stats++;
+
                 if (l == -1 && r == -1) {
                     //leaf node - check triangles
+                    //stats += device_data_array[current_inx].num_tris;
+
+                    stats = current_inx;
+
                     RayHitData leaf_triangle_hit = check_leaf_node(ray, current_inx);
                     if (leaf_triangle_hit.ray_hits && (leaf_triangle_hit.ray_travelled_dist < best_hit.ray_travelled_dist)) {best_hit = leaf_triangle_hit;}  //new best hit
 
@@ -559,15 +600,15 @@ __host__ __device__ class BVH {
                 RayHitData l_box = device_data_array[l].box.ray_hits(ray);
                 RayHitData r_box = device_data_array[r].box.ray_hits(ray);
 
-                if (l_box.ray_hits) {
+                if (l_box.ray_hits && l_box.ray_travelled_dist > 0) {
                     stack.push(l);
                 }
-                if (r_box.ray_hits) {
+                if (r_box.ray_hits && r_box.ray_travelled_dist > 0) {
                     stack.push(r);
                 }
             }
 
-            return best_hit;
+            return stats;//best_hit;
         }
 
         __device__ RayHitData check_leaf_node(Ray *ray, int node_inx) {
@@ -600,42 +641,52 @@ __host__ __device__ class BVH {
                 return data_array.size() - 1;
             }
 
-            Vec3 ref_point = get_ref_point(current_box, depth % 2 == 0);
+            std::pair<std::vector<int>, std::vector<int>> splitted = split_triangles(triangle_inxs, current_box);
 
-            //get the distances from each triangle inx to the reference point
-            std::vector<std::pair<int, float>> triangle_dists;
-            for (int i : triangle_inxs) {
-                float dist = (host_triangles[i].points[0] - ref_point).magnitude();
-
-                std::pair<int, float> values = std::make_pair(i, dist);
-
-                triangle_dists.push_back(values);
-            }
-
-            std::vector<std::pair<int, float>> sorted_tris = sort_triangles(triangle_dists);
-
-            //closest half go to the left, furthest half go right
-            std::vector<int> left;
-            std::vector<int> right;
-
-            int mid = host_triangles.size() / 2;
-
-            for (int i = 0; i < sorted_tris.size(); i++) {
-                int tri_inx = sorted_tris[i].first;
-
-                if (i <= mid) {
-                    left.push_back(tri_inx);
-                } else {
-                    right.push_back(tri_inx);
-                }
-            }
-
-            int left_pointer = build(left, depth - 1);
-            int right_pointer = build(right, depth - 1);
+            int left_pointer = build(splitted.first, depth - 1);
+            int right_pointer = build(splitted.second, depth - 1);
 
             add_tree_node(current_box, left_pointer, right_pointer, triangle_inxs);
 
             return data_array.size() - 1;
+        }
+
+        __host__ std::pair<std::vector<int>, std::vector<int>> split_triangles(std::vector<int> triangle_inxs, BoundingBox box) {
+            //split the triangles in the box along its longest axis
+            int axis = 0;
+            float len = box.width;
+
+            if (box.height > len) {
+                axis = 2;
+                len = box.height;
+            }
+            //if (box.depth > len) {
+            //    axis = 3;
+            //    len = box.depth;
+            //}
+
+            std::pair<std::vector<int>, std::vector<int>> splitted;
+
+            for (int i : triangle_inxs) {
+                Vec3 point = host_triangles[i].points[0];
+
+                bool go_in_a;
+                if (axis == 0) {
+                    go_in_a = point.x < box.tl_near.x + len / 2;
+                } else if (axis == 1) {
+                    go_in_a = point.y < box.tl_near.y - len / 2;
+                } else {
+                    go_in_a = point.z < box.tl_near.z + len / 2;
+                }
+
+                if (go_in_a) {
+                    splitted.first.push_back(i);
+                } else {
+                    splitted.second.push_back(i);
+                }
+            }
+
+            return splitted;
         }
 
         __host__ Vec3 get_ref_point(BoundingBox current_box, bool horizontal_split) {
@@ -651,6 +702,8 @@ __host__ __device__ class BVH {
         __host__ void add_tree_node(BoundingBox node, int left, int right, std::vector<int> triangle_inxs) {
             left_pointer.push_back(left);
             right_pointer.push_back(right);
+
+            node.assign_cuboid();
 
             //allocate the memory for the BoundingBoxTris struct
             BoundingBoxTris box{node, static_cast<int>(triangle_inxs.size())};
@@ -668,62 +721,9 @@ __host__ __device__ class BVH {
             data_array.push_back(box);
         }
 
-        __host__ std::vector<std::pair<int, float>> sort_triangles(std::vector<std::pair<int, float>> triangles) {
-            //perform a merge sort on the triangles based on their distance from the reference point
-            int len = triangles.size();
-
-            if (len <= 1) {
-                return triangles;
-            }
-
-            int mid = len / 2;
-
-            std::vector<std::pair<int, float>> left;
-            std::vector<std::pair<int, float>> right;
-
-            for (int i = 0; i < len; i++) {
-                if (i < mid) {
-                    left.push_back(triangles[i]);
-                } else {
-                    right.push_back(triangles[i]);
-                }
-            }
-
-            std::vector<std::pair<int, float>> sorted_left = sort_triangles(left);
-            std::vector<std::pair<int, float>> sorted_right = sort_triangles(right);
-
-            int l_inx = 0;
-            int r_inx = 0;
-
-            std::vector<std::pair<int, float>> sorted_triangles;
-
-            for (int _ = 0; _ < len; _++) {
-                bool add_left;
-
-                if (l_inx >= left.size()) {
-                    add_left = false;
-                } else if (r_inx >= right.size()) {
-                    add_left = true;
-                } else {
-                    //choose the smallest value
-                    add_left = sorted_left[l_inx].second < sorted_right[r_inx].second;
-                }
-
-                if (add_left) {
-                    sorted_triangles.push_back(sorted_left[l_inx]);
-                    l_inx++;
-                } else {
-                    sorted_triangles.push_back(sorted_right[r_inx]);
-                    r_inx++;
-                }
-            }
-
-            return sorted_triangles;
-        }
-
         __host__ void allocate_mem() {
             //allocate the tree arrays to the device memory
-            int data_mem_size = data_array.size() * sizeof(BoundingBox);
+            int data_mem_size = data_array.size() * sizeof(BoundingBoxTris);
             int pointer_mem_size = left_pointer.size() * sizeof(int);
 
             //allocate the memory
@@ -756,6 +756,8 @@ __host__ __device__ class BVH {
 
 __host__ __device__ class Mesh {
     public:
+        BVH bvh;
+
         __host__ Mesh() {}
 
         __host__ Mesh(std::vector<Triangle> host_triangle_array, Triangle *device_triangle_array) {
@@ -764,7 +766,7 @@ __host__ __device__ class Mesh {
 
             num_triangles = host_triangle_array.size();
 
-            bvh = BVH(host_triangles, device_triangles, 6);
+            bvh = BVH(host_triangles, device_triangles, 4);
         }
 
         __device__ Vec3 test(Ray *ray) {
@@ -795,7 +797,6 @@ __host__ __device__ class Mesh {
         std::vector<Triangle> host_triangles;
         Triangle *device_triangles;
 
-        BVH bvh;
 };
 
 

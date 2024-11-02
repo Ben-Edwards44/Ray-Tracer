@@ -149,22 +149,21 @@ class SceneObjects {
 
         void monkey_test_scene() {
             //setup simple test scene with a cornell box, suzanne mesh and sphere
-            /*
+            ///*
             Texture monkey_tex = Texture::create_const_colour(Vec3(1, 1, 1));
             Material monkey_mat = Material::create_standard(monkey_tex, 0);
 
             ObjFileMesh m("models/low_poly_monkey.obj");
             m.enlarge(0.3);
-            m.rotate(0, 2.3, 0);
+            //m.rotate(0, 2.3, 0);
             m.translate(0.1, -0.1, 1.6);
 
             Object monkey_mesh = create_mesh(m, monkey_mat);
             objects.push_back(monkey_mesh);
 
             return;
-            */
-
-
+            //*/
+            /*
             create_cornell_box(Vec3(-0.5, 0.5, 1.2), 1, 1, 1, 0.5);
 
             Texture monkey_tex = Texture::create_const_colour(Vec3(1, 1, 1));
@@ -183,6 +182,7 @@ class SceneObjects {
             Object sphere = Object::create_sphere(Vec3(-0.25, -0.25, 1.95), 0.25, sphere_mat);
 
             objects.push_back(sphere);
+            */
         }
 
         void reflection_test_scene() {
