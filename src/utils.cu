@@ -2,15 +2,15 @@
 #include <stdexcept>
 
 
-__host__ void check_cuda_error(cudaError_t error) {
+__host__ void check_cuda_error(cudaError_t error, std::string msg) {
     if (error != cudaSuccess) {
         std::string err_msg = cudaGetErrorString(error);
-        throw std::runtime_error("Error from CUDA: " + err_msg);
+        throw std::runtime_error("Error from CUDA (" + msg + "): " + err_msg);
     }
 }
 
 
-class Vec3 {
+__host__ __device__ class Vec3 {
     public:
         float x;
         float y;
@@ -107,6 +107,10 @@ class Vec3 {
             return this;
         }
 
+        __device__ bool operator==(Vec3 other_vec) {
+            return x == other_vec.x && y == other_vec.y && z == other_vec.z;
+        }
+
         __host__ __device__ float magnitude() {
             float mag_sq = x * x + y * y + z * z;
             return sqrt(mag_sq);
@@ -155,7 +159,7 @@ class Vec3 {
 };
 
 
-class Vec2 {
+__host__ __device__ class Vec2 {
     public:
         float x;
         float y;
@@ -174,6 +178,38 @@ class Vec2 {
         __device__ Vec2 operator*(float scalar) {
             return Vec2(x * scalar, y * scalar);
         }
+};
+
+
+template <typename T>
+__device__ class DeviceStack {
+    public:
+        static const int MAX_SIZE = 32;
+
+        __device__ DeviceStack() {
+            top = -1;
+        }
+
+        __device__ void push(T item) {
+            top++;
+            items[top] = item;
+        }
+
+        __device__ T pop() {
+            T item = items[top];
+            top--;
+
+            return item;
+        }
+
+        __device__ bool is_empty() {
+            return top == -1;
+        }
+
+    private:
+        int top;
+
+        T items[MAX_SIZE];
 };
 
 
