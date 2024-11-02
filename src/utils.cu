@@ -182,9 +182,13 @@ __host__ __device__ class Vec2 {
 
 
 template <typename T>
-__host__ __device__ class DeviceStack {
+__device__ class DeviceStack {
     public:
-        __host__ DeviceStack() {}
+        static const int MAX_SIZE = 32;
+
+        __device__ DeviceStack() {
+            top = -1;
+        }
 
         __device__ void push(T item) {
             top++;
@@ -198,25 +202,14 @@ __host__ __device__ class DeviceStack {
             return item;
         }
 
-        __device__ void empty() {
-            top = -1;
-        }
-
         __device__ bool is_empty() {
             return top == -1;
-        } 
-
-        __host__ void allocate_mem(int max_size) {
-            int mem_size = max_size * sizeof(T);
-
-            //allocate the memory
-            cudaError_t error = cudaMalloc((void **)&items, mem_size);
-            check_cuda_error(error, "allocating stack memory");
         }
 
     private:
         int top;
-        T *items;
+
+        T items[MAX_SIZE];
 };
 
 
