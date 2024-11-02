@@ -94,14 +94,7 @@ __device__ Vec3 trace_ray(Ray ray) {
 }
 
 
-__device__ Vec3 test(Ray ray) {
-    return const_objects.meshes[0].test(&ray);
-}
-
-
 __device__ Vec3 get_ray_colour(Vec3 previous_colour, Ray ray, int frame_num) {
-    //return test(ray);
-
     RayCollision hit = get_ray_collision(&ray);
 
     Vec3 colour(0, 0, 0);

@@ -485,75 +485,18 @@ __host__ __device__ class BVH {
     public:
         __host__ BVH() {}
 
-        //temp!!!!!
-        int num_tri;
-
         __host__ BVH(std::vector<Triangle> host_tris, Triangle *device_tris, int max_depth) {
             host_triangles = host_tris;
             device_triangles = device_tris;
-
-            num_tri = host_tris.size();
 
             std::vector<int> inxs;
             for (int i = 0; i < host_tris.size(); i++) {
                 inxs.push_back(i);
             }
 
-            printf("num tris: %u\n", (int)host_tris.size());
-
             root_node_inx = build(inxs, max_depth);
 
-            printf("built: %u\n", root_node_inx);
-
-            printf("tree:\n");
-            for (int i = 0; i <= root_node_inx; i++) {
-                printf("\t%u\n", i);
-                if (left_pointer[i] == -1) {printf("\t\ttris:%u\n", data_array[i].num_tris);}
-            }
-
             allocate_mem();
-        }
-
-        __device__ Vec3 test(Ray *ray) {
-            RayHitData closest_hit{false, INF};
-
-            for (int i = 0; i < num_tri; i++) {
-                Triangle triangle = device_triangles[i];
-                RayHitData hit_data = triangle.hit(ray);
-
-                if (hit_data.ray_hits && hit_data.ray_travelled_dist < closest_hit.ray_travelled_dist) {closest_hit = hit_data;}
-            }
-
-            RayHitData act = closest_hit;
-            //RayHitData got = traverse(ray, root_node_inx);
-
-            //if (!act.ray_hits) {return Vec3(0, 0, 1);}
-
-            int b = test_traverse(ray, root_node_inx);
-
-            if (b != 0) {
-                printf("tests: %u\n", b);
-            }
-
-            if (b > 100) {return Vec3(1, 0, 0);}
-
-            float c = (float)b / 50.0;
-
-            return Vec3(c, c, c);
-
-            //if (got.hit_point == act.hit_point) {
-            //    return Vec3(1, 1, 1);
-            //} else {
-            //    //printf("wanted: %f, %f, %f. Got: %f, %f, %f\n", act.hit_point.x, act.hit_point.y, act.hit_point.z, got.hit_point.x, got.hit_point.y, got.hit_point.z);
-            //    return Vec3(1, 0, 0);
-            //}
-
-            //if (got_inx == -1) {
-            //    return Vec3(1, 0, 0);
-            //} else {
-            //    float c = (float)got_inx / ((float)root_node_inx + 1);
-            //    return Vec3(c, c, c);
-            //}
         }
 
         __device__ RayHitData hit(Ray *ray) {
@@ -577,61 +520,9 @@ __host__ __device__ class BVH {
         int *device_left_pointer;
         int *device_right_pointer;
 
-        __device__ int test_traverse(Ray *ray, int node_inx) {
-            //TODO: make sure stack is in registers or shared mem, not in vram!!!!!!!!!!!!!!!
-            //perform a dfs of the tree (recursion does not play too well on the gpu, so an iterative method is used instead)
-            DeviceStack<int> stack;
-
-            RayHitData best_hit{false, INF};
-
-            stack.push(node_inx);
-
-            int stats = 0;
-
-            while (!stack.is_empty()) {
-                int current_inx = stack.pop();
-
-                RayHitData box_hit = device_data_array[current_inx].box.ray_hits(ray);
-
-                if (!box_hit.ray_hits || box_hit.ray_travelled_dist > best_hit.ray_travelled_dist) {continue;}  //no need to traverse this node
-
-                int l = device_left_pointer[current_inx];
-                int r = device_right_pointer[current_inx];
-
-                //stats++;
-
-                if (l == -1 && r == -1) {
-                    //leaf node - check triangles
-                    stats += device_data_array[current_inx].num_tris;
-
-                    RayHitData leaf_triangle_hit = check_leaf_node(ray, current_inx);
-                    if (leaf_triangle_hit.ray_hits && (leaf_triangle_hit.ray_travelled_dist < best_hit.ray_travelled_dist)) {best_hit = leaf_triangle_hit;}  //new best hit
-
-                    continue;
-                }
-
-                RayHitData l_box = device_data_array[l].box.ray_hits(ray);
-                RayHitData r_box = device_data_array[r].box.ray_hits(ray);
-
-                bool l_push = l_box.ray_hits && l_box.ray_travelled_dist < best_hit.ray_travelled_dist;
-                bool r_push = r_box.ray_hits && r_box.ray_travelled_dist < best_hit.ray_travelled_dist;
-
-                bool l_first = l_box.ray_travelled_dist < r_box.ray_travelled_dist;
-
-                if (l_first) {
-                    if (l_push) {stack.push(l);}
-                    if (r_push) {stack.push(r);}
-                } else {
-                    if (r_push) {stack.push(r);}
-                    if (l_push) {stack.push(l);}
-                }
-            }
-
-            return stats;//best_hit;
-        }
-
         __device__ RayHitData traverse(Ray *ray, int node_inx) {
             //perform a dfs of the tree (recursion does not play too well on the gpu, so an iterative method is used instead)
+            //TODO: ensure stack is allocated to registers or shared memory and not VRAM
             DeviceStack<int> stack;
 
             RayHitData best_hit{false, INF};
@@ -674,6 +565,58 @@ __host__ __device__ class BVH {
             }
 
             return best_hit;
+        }
+
+        __device__ int debug_stats(Ray *ray, int node_inx, bool triangle_tests) {
+            //this is identical to the traverse() function, but it returns the number of triangle and box tests
+            DeviceStack<int> stack;
+
+            RayHitData best_hit{false, INF};
+
+            stack.push(node_inx);
+
+            int debug_info = 0;
+
+            while (!stack.is_empty()) {
+                int current_inx = stack.pop();
+
+                RayHitData box_hit = device_data_array[current_inx].box.ray_hits(ray);
+
+                if (!box_hit.ray_hits || box_hit.ray_travelled_dist > best_hit.ray_travelled_dist) {continue;}  //no need to traverse this node
+
+                int l = device_left_pointer[current_inx];
+                int r = device_right_pointer[current_inx];
+
+                if (!triangle_tests) {debug_info++;}  //bounding box test
+
+                if (l == -1 && r == -1) {
+                    //leaf node - check triangles
+                    if (triangle_tests) {debug_info += device_data_array[current_inx].num_tris;}  //triangle test
+
+                    RayHitData leaf_triangle_hit = check_leaf_node(ray, current_inx);
+                    if (leaf_triangle_hit.ray_hits && (leaf_triangle_hit.ray_travelled_dist < best_hit.ray_travelled_dist)) {best_hit = leaf_triangle_hit;}  //new best hit
+
+                    continue;
+                }
+
+                RayHitData l_box = device_data_array[l].box.ray_hits(ray);
+                RayHitData r_box = device_data_array[r].box.ray_hits(ray);
+
+                bool l_push = l_box.ray_hits && l_box.ray_travelled_dist < best_hit.ray_travelled_dist;
+                bool r_push = r_box.ray_hits && r_box.ray_travelled_dist < best_hit.ray_travelled_dist;
+
+                bool l_first = l_box.ray_travelled_dist < r_box.ray_travelled_dist;
+
+                if (l_first) {
+                    if (l_push) {stack.push(l);}
+                    if (r_push) {stack.push(r);}
+                } else {
+                    if (r_push) {stack.push(r);}
+                    if (l_push) {stack.push(l);}
+                }
+            }
+
+            return debug_info;
         }
 
         __device__ RayHitData check_leaf_node(Ray *ray, int node_inx) {
@@ -879,26 +822,8 @@ __host__ __device__ class Mesh {
             bvh = BVH(host_triangles, device_triangles, 7);
         }
 
-        __device__ Vec3 test(Ray *ray) {
-            return bvh.test(ray);
-        }
-
         __device__ RayHitData hit(Ray *ray) {
             return bvh.hit(ray);
-
-            /*
-            RayHitData closest_hit{false, INF};
-
-            //if (!bounding_box.ray_hits(ray)) {return closest_hit;}  //ray is never going to hit
-
-            for (int i = 0; i < num_triangles; i++) {
-                RayHitData hit_data = device_triangles[i].hit(ray);
-
-                if (hit_data.ray_hits && hit_data.ray_travelled_dist < closest_hit.ray_travelled_dist) {closest_hit = hit_data;}
-            }
-
-            return closest_hit;
-            */
         }
 
     private:
@@ -906,7 +831,6 @@ __host__ __device__ class Mesh {
 
         std::vector<Triangle> host_triangles;
         Triangle *device_triangles;
-
 };
 
 
@@ -951,10 +875,6 @@ __host__ __device__ class Object {
                 case MESH:
                     return mesh.hit(ray);
             }
-        }
-
-        __device__ Vec3 test(Ray *ray) {
-            return mesh.test(ray);
         }
 
         //initialisers for each type
