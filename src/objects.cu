@@ -133,56 +133,37 @@ __host__ __device__ class Triangle {
         }
 
         __device__ RayHitData hit(Ray *ray) {
-            Vec3 vecs_to_corner[3];
+            //Moller-Trumbore algorithm: https://www.scratchapixel.com/lessons/3d-basic-rendering/ray-tracing-rendering-a-triangle/moller-trumbore-ray-triangle-intersection.html. My own algorithm was too slow :(
+            Vec3 p_vec = ray->direction.cross(side2);
 
-            for (int i = 0; i < 3; i++) {
-                vecs_to_corner[i] = points[i] - ray->origin;
-            }
+            float det = side1.dot(p_vec);
+            float inv_det = 1 / det;
 
-            int num_outside = 0;
-            for (int i = 0; i < 3; i++) {
-                Vec3 normal = vecs_to_corner[i].cross(vecs_to_corner[(i + 1) % 3]);
-                float dot_prod = normal.dot(ray->direction);
+            Vec3 t_vec = ray->origin - points[0];
+            float u = t_vec.dot(p_vec) * inv_det;
 
-                if (dot_prod < 0) {num_outside++;}  //ray points outside of the triangle
-            }
+            Vec3 q_vec = t_vec.cross(side1);
+            float v = ray->direction.dot(q_vec) * inv_det;
 
-            //depending on the order of the points, the normals to the sides always point in or alyawys point out. Therefore, a ray interects <=> it is always within the vecs or always outside the vecs
-            bool ray_hits = num_outside == 0 || num_outside == 3;
+            float w = 1 - u - v;
+
+            float dist = side2.dot(q_vec) * inv_det;
+
+            bool ray_hits = dist > FLOAT_PRECISION_ERROR && u >= 0 && v >= 0 && w >= 0;
 
             RayHitData hit_data;
-            bool valid_hit = false;
-
-            if (ray_hits) {
-                float ray_dist = get_ray_travelled_dist(ray);
-
-                //only render triangles in front of ray
-                if (ray_dist > FLOAT_PRECISION_ERROR) {
-                    valid_hit = true;
-
-                    hit_data.ray_hits = true;
-                    hit_data.ray_travelled_dist = ray_dist;
-                    hit_data.hit_point = ray->get_pos(hit_data.ray_travelled_dist);
-
-                    Vec3 normal = normal_vec;
-                    if (normal.dot(ray->direction) > 0) {normal *= -1;}  //normal should point in same direction as the ray
-
-                    hit_data.normal_vec = normal;
-
-                    if (material.need_uv) {assign_texture_coords(&hit_data);}
-                }
-            }
-
-            if (!valid_hit) {
-                //set correct default values
-                hit_data.ray_hits = false;
-                hit_data.ray_travelled_dist = INF;
-            }
+            hit_data.ray_hits = ray_hits;
+            hit_data.ray_travelled_dist = dist * ray_hits + INF * (1 - ray_hits);  //branchless way of setting dist to INF when ray does not hit
+            hit_data.hit_point = ray->get_pos(dist);
+            hit_data.normal_vec = normal_vec * (1 - 2 * (normal_vec.dot(ray->direction) > 0));  //branchless way of ensuring the normal vector is pointing the correct way
 
             return hit_data;
         }
 
         private:
+            Vec3 side1;
+            Vec3 side2;
+
             Plane plane;
 
             Vec2 texture_points[3];
@@ -191,8 +172,8 @@ __host__ __device__ class Triangle {
 
             __host__ void precompute() {
                 //precompute the plane the mesh lies on and (one of) its normal vectors. https://math.stackexchange.com/questions/2686606/equation-of-a-plane-passing-through-3-points
-                Vec3 side1 = points[0] - points[1];
-                Vec3 side2 = points[1] - points[2];
+                side1 = points[1] - points[0];
+                side2 = points[2] - points[0];
 
                 normal_vec = side1.cross(side2).normalised();
 
@@ -463,8 +444,7 @@ __host__ __device__ class BoundingBox {
             tmax = min(tmax, max(t1, t2));
 
             bool ray_hits = tmin < tmax && tmax > 0;
-            float ray_dist = INF;
-            if (ray_hits) {ray_dist = tmin;}
+            float ray_dist = tmin;  //NOTE: this value will be wrong if the ray does not hit
 
             return RayHitData{ray_hits, ray_dist};  //we are only ever going to use the 1st two attrs (no need for the hit normal etc.)
         }
@@ -649,7 +629,7 @@ __host__ __device__ class BVH {
                 return data_array.size() - 1;
             }
 
-            std::pair<std::vector<int>, std::vector<int>> splitted = split_triangles(triangle_inxs, current_box, depth);
+            std::pair<std::vector<int>, std::vector<int>> splitted = split_triangles(triangle_inxs, current_box);
 
             int left_pointer = build(splitted.first, depth - 1);
             int right_pointer = build(splitted.second, depth - 1);
@@ -659,8 +639,8 @@ __host__ __device__ class BVH {
             return data_array.size() - 1;
         }
 
-        __host__ std::pair<std::vector<int>, std::vector<int>> split_triangles(std::vector<int> triangle_inxs, BoundingBox box, int depth) {
-            Vec3 ref_point = get_ref_point(box, depth);
+        __host__ std::pair<std::vector<int>, std::vector<int>> split_triangles(std::vector<int> triangle_inxs, BoundingBox box) {
+            Vec3 ref_point = get_ref_point(box);
 
             //get the distances from each triangle inx to the reference point
             std::vector<std::pair<int, float>> triangle_dists;
@@ -741,11 +721,11 @@ __host__ __device__ class BVH {
             return sorted_triangles;
         }
 
-        __host__ Vec3 get_ref_point(BoundingBox current_box, int depth) {
-            if (depth % 3 == 0) {
+        __host__ Vec3 get_ref_point(BoundingBox current_box) {
+            if (current_box.width >= current_box.height && current_box.width >= current_box.depth) {
                 //we want the center of the bottom plane (hor split)
                 return Vec3(current_box.bl_near.x + current_box.width / 2, current_box.bl_near.y, current_box.bl_near.z + current_box.depth / 2);
-            } else if (depth % 3 == 1) {
+            } else if (current_box.height >= current_box.width && current_box.height >= current_box.depth) {
                 //we want the center of the left plane (vert split)
                 return Vec3(current_box.bl_near.x, current_box.bl_near.y + current_box.height / 2, current_box.bl_near.z + current_box.depth / 2);
             } else {
@@ -819,7 +799,7 @@ __host__ __device__ class Mesh {
 
             num_triangles = host_triangle_array.size();
 
-            bvh = BVH(host_triangles, device_triangles, 7);
+            bvh = BVH(host_triangles, device_triangles, 10);
         }
 
         __device__ RayHitData hit(Ray *ray) {
