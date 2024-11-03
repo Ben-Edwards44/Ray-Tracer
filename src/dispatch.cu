@@ -133,7 +133,7 @@ void run_ray_tracer(VariableRenderData *data, int current_time_ms) {
 
     ReadWriteDeviceArray<float> image_pixels(PIXEL_ARRAY_LEN);
 
-    dim3 thread_dim(16, 16);  //max is 1024
+    dim3 thread_dim(8, 8);  //max is 1024
     dim3 block_dim = get_block_size(SCREEN_WIDTH, SCREEN_HEIGHT, thread_dim);
 
     get_pixel_colour<<<block_dim, thread_dim>>>(image_pixels.array, prev_render.device_pointer, current_time.device_pointer, device_frame_num.device_pointer);  //launch kernel
