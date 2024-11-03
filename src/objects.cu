@@ -442,22 +442,22 @@ __host__ __device__ class BoundingBox {
             float tmax = INF;
 
             //x
-            float t1 = (bl_near.x - ray->origin.x) / ray->direction.x;
-            float t2 = (tr_far.x - ray->origin.x) / ray->direction.x;
+            float t1 = (bl_near.x - ray->origin.x) * ray->direction_inv.x;
+            float t2 = (tr_far.x - ray->origin.x) * ray->direction_inv.x;
 
             tmin = max(tmin, min(t1, t2));
             tmax = min(tmax, max(t1, t2));
 
             //y
-            t1 = (bl_near.y - ray->origin.y) / ray->direction.y;
-            t2 = (tr_far.y - ray->origin.y) / ray->direction.y;
+            t1 = (bl_near.y - ray->origin.y) * ray->direction_inv.y;
+            t2 = (tr_far.y - ray->origin.y) * ray->direction_inv.y;
 
             tmin = max(tmin, min(t1, t2));
             tmax = min(tmax, max(t1, t2));
 
             //z
-            t1 = (bl_near.z - ray->origin.z) / ray->direction.z;
-            t2 = (tr_far.z - ray->origin.z) / ray->direction.z;
+            t1 = (bl_near.z - ray->origin.z) * ray->direction_inv.z;
+            t2 = (tr_far.z - ray->origin.z) * ray->direction_inv.z;
 
             tmin = max(tmin, min(t1, t2));
             tmax = min(tmax, max(t1, t2));

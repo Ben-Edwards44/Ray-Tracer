@@ -41,6 +41,7 @@ __device__ class Ray {
 
         Vec3 origin;
         Vec3 direction;  //NOTE: this must be a normalised vector
+        Vec3 direction_inv;
 
         uint *rng_state;
 
@@ -68,8 +69,9 @@ __device__ class Ray {
             Vec3 diffuse_dir = true_lambertian_reflect(hit_data);
             Vec3 specular_dir = perfect_reflect(hit_data);
 
-            direction = lerp(diffuse_dir, specular_dir, obj_material.smoothness).normalised();
             origin = hit_data->hit_point;
+
+            change_direction(lerp(diffuse_dir, specular_dir, obj_material.smoothness).normalised());
         }
 
         __device__ void refract(RayHitData *hit_data, Material obj_material) {
@@ -120,23 +122,23 @@ __device__ class Ray {
 
             Vec3 resultant_refract = reference_normal * cos(theta2) + perp_component * sin(theta2);
 
-            direction = resultant_refract.normalised();
             origin = hit_data->hit_point;
+
+            change_direction(resultant_refract.normalised());
         }
 
         __device__ void apply_antialias() {
             if (!antialias) {return;}
 
             //shift the direction of the ray slightly to smooth edges
-            float x_offset = (pseudorandom_num(rng_state) - 0.5) * 2 * ANTIALIAS_OFFSET_RANGE;
-            float y_offset = (pseudorandom_num(rng_state) - 0.5) * 2 * ANTIALIAS_OFFSET_RANGE;
-            float z_offset = (pseudorandom_num(rng_state) - 0.5) * 2 * ANTIALIAS_OFFSET_RANGE;
+            Vec3 offset(0, 0, 0);
+            offset.x = (pseudorandom_num(rng_state) - 0.5) * 2 * ANTIALIAS_OFFSET_RANGE;
+            offset.y = (pseudorandom_num(rng_state) - 0.5) * 2 * ANTIALIAS_OFFSET_RANGE;
+            offset.z = (pseudorandom_num(rng_state) - 0.5) * 2 * ANTIALIAS_OFFSET_RANGE;
 
-            direction.x += x_offset;
-            direction.y += y_offset;
-            direction.z += z_offset;
+            Vec3 new_dir = direction + offset;
 
-            direction = direction.normalised();
+            change_direction(new_dir.normalised());
         }
     
     private:
@@ -148,7 +150,8 @@ __device__ class Ray {
             Vec3 dir = view_pos - o;
 
             origin = o;
-            direction = dir.normalised();
+
+            change_direction(dir.normalised());
         }
 
         __device__ Vec3 diffuse_reflect(RayHitData *hit_data) {
@@ -190,5 +193,11 @@ __device__ class Ray {
             float cos_theta = cos(theta1);  //TODO: we already did arccos(theta1) previously, so could save time
 
             return r0 + (1 - r0) * pow((1 - cos_theta), 5);  //in range [0, 1]
+        }
+
+        __device__ void change_direction(Vec3 new_dir) {
+            //ensure we update the inverse direction as well
+            direction = new_dir;
+            direction_inv = Vec3(1, 1, 1) / new_dir;
         }
 };

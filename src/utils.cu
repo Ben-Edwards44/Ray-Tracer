@@ -99,6 +99,10 @@ __host__ __device__ class Vec3 {
             return Vec3(x / scalar, y / scalar, z / scalar);
         }
 
+        __device__ Vec3 operator/(Vec3 other_vec) {
+            return Vec3(x / other_vec.x, y / other_vec.y, z / other_vec.z);
+        }
+
         __device__ Vec3* operator/=(float scalar) {
             x /= scalar;
             y /= scalar;
