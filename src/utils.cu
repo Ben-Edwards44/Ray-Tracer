@@ -121,8 +121,8 @@ __host__ __device__ class Vec3 {
         }
 
         __host__ __device__ Vec3 normalised() {
-            float mag = magnitude();
-            Vec3 unit_vec(x / mag, y / mag, z / mag);
+            float inv_mag = 1 / magnitude();
+            Vec3 unit_vec(x * inv_mag, y * inv_mag, z * inv_mag);
 
             return unit_vec;
         }
