@@ -156,6 +156,8 @@ __host__ __device__ class Triangle {
             hit_data.ray_travelled_dist = dist * ray_hits + INF * (1 - ray_hits);  //branchless way of setting dist to INF when ray does not hit
             hit_data.hit_point = ray->get_pos(dist);
             hit_data.normal_vec = normal_vec * (1 - 2 * (normal_vec.dot(ray->direction) > 0));  //branchless way of ensuring the normal vector is pointing the correct way
+            
+            if (material.need_uv) {assign_texture_coords(&hit_data, w, u, v);}  //NOTE: u, v, w are swapped because of differing conventions (I don't really know why - it just works)
 
             return hit_data;
         }
@@ -191,27 +193,9 @@ __host__ __device__ class Triangle {
                 return -numerator / denominator;
             }
 
-            __device__ Vec3 get_baycentric_coords(Vec3 hit_point) {
-                //get the baycentric coords of the point in the triangle (https://www.scratchapixel.com/lessons/3d-basic-rendering/ray-tracing-rendering-a-triangle/barycentric-coordinates.html)
-                Vec3 ab = points[1] - points[0];
-                Vec3 ac = points[2] - points[0];
-                Vec3 bc = points[2] - points[1];
-                
-                Vec3 ap = hit_point - points[0];
-                Vec3 bp = hit_point - points[1];
-                
-                float area_u = 0.5 * ab.cross(ap).magnitude();
-                float area_v = 0.5 * ac.cross(ap).magnitude();
-                float area_w = 0.5 * bc.cross(bp).magnitude();
-
-                return Vec3(area_u / area, area_v / area, area_w / area);
-            }
-
-            __device__ void assign_texture_coords(RayHitData *hit_data) {
-                Vec3 b_coords = get_baycentric_coords(hit_data->hit_point);
-
+            __device__ void assign_texture_coords(RayHitData *hit_data, float u, float v, float w) {
                 //linearlly interpolate the (u, v) texture points of each vertex
-                hit_data->texture_uv = texture_points[0] * b_coords.x + texture_points[1] * b_coords.y + texture_points[2] * b_coords.z;
+                hit_data->texture_uv = texture_points[0] * u + texture_points[1] * v + texture_points[2] * w;
             }
 };
 
