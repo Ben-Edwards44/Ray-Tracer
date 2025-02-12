@@ -379,7 +379,7 @@ class RenderSettings {
 
         void assign_default(bool use_sky) {
             //these settings can be changed
-            reflect_limit = 5;
+            reflect_limit = 6;
             rays_per_pixel = 100;
 
             antialias = true;
