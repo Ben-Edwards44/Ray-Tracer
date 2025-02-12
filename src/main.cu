@@ -8,7 +8,7 @@
 #include "obj_read.cu"
 
 
-const int SCENE_NUM = 0;
+const int SCENE_NUM = 5;
 
 const Vec3 SKY_COLOUR(0.8, 1, 1);
 
@@ -98,6 +98,8 @@ class SceneObjects {
         bool use_sky = true;
 
         SceneObjects(int test_scene) {
+            test_scene_num = test_scene;
+
             switch (test_scene) {
                 case 0:
                     monkey_test_scene();
@@ -114,6 +116,9 @@ class SceneObjects {
                 case 4:
                     rand_sphere_test_scene();
                     break;
+                case 5:
+                    demo_scene();
+                    break;
                 default:
                     throw std::domain_error("Test scene must be number between 0 and 3 (inclusive).\n");
             }
@@ -121,7 +126,18 @@ class SceneObjects {
             gpu_struct = create_gpu_struct();
         }
 
+        void set_camera_rot(Camera *cam) {
+            //difference scenes have different camera rotations
+            switch (test_scene_num) {
+                case 4:
+                    cam->x_rot = -20 * (PI / 180);
+                    break;
+            }
+        }
+
     private:
+        int test_scene_num;   
+
         std::vector<Object> objects;
 
         Object create_mesh(ObjFileMesh obj, Material mat) {
@@ -214,7 +230,7 @@ class SceneObjects {
 
         void rand_sphere_test_scene() {
             //final scene from https://raytracing.github.io/books/RayTracingInOneWeekend.html#wherenext?/afinalrender
-            int num_spheres = 100;
+            int num_spheres = 75;
 
             float floor_y = -1;
             float floor_width = 10;
@@ -247,6 +263,52 @@ class SceneObjects {
             Material floor_mat = Material::create_standard(floor_tex, 0);
 
             objects.push_back(Object::create_quad(Vec3(-floor_width / 2, floor_y, 0), Vec3(floor_width / 2, floor_y, 0), Vec3(floor_width / 2, floor_y, floor_depth), Vec3(-floor_width / 2, floor_y, floor_depth), floor_mat));
+        }
+
+        void demo_scene() {
+            create_cornell_box(Vec3(-0.6, 0.5, 1.2), 1.2, 1, 1, 0.5);
+
+            Texture sphere1_tex = Texture::create_const_colour(Vec3(1, 1, 1));
+            Material sphere1_mat = Material::create_standard(sphere1_tex, 1);
+
+            objects.push_back(Object::create_sphere(Vec3(0, -0.4, 1.6), 0.175, sphere1_mat));
+
+            Texture sphere2_tex = Texture::create_const_colour(Vec3(1, 1, 1));
+            Material sphere2_mat = Material::create_emissive(Vec3(1, 1, 1), 2);
+
+            objects.push_back(Object::create_sphere(Vec3(-0.45, -0.485, 1.3), 0.05, sphere2_mat));
+            objects.push_back(Object::create_sphere(Vec3(0.5, -0.45, 1.6), 0.1, sphere2_mat));
+
+            Texture box1_text = Texture::create_const_colour(Vec3(0.28, 0.65, 0.65));
+            Material box1_mat = Material::create_standard(box1_text, 1);
+            Texture box2_text = Texture::create_const_colour(Vec3(0.6, 0.8, 0.82));
+            Material box2_mat = Material::create_standard(box2_text, 1);
+
+            objects.push_back(Object::create_quad(Vec3(0, -0.5, 1.9), Vec3(0.3, -0.5, 1.6), Vec3(0.3, 0.1, 1.6), Vec3(0, 0.1, 1.9), box1_mat));
+            objects.push_back(Object::create_quad(Vec3(0, -0.5, 1.9), Vec3(0, 0.1, 1.9), Vec3(0.1, 0.1, 2), Vec3(0.1, -0.5, 2), box1_mat));
+            objects.push_back(Object::create_quad(Vec3(0.3, -0.5, 1.6), Vec3(0.3, 0.1, 1.6), Vec3(0.4, 0.1, 1.7), Vec3(0.4, -0.5, 1.7), box1_mat));
+        
+            Texture box3_text = Texture::create_const_colour(Vec3(1, 1, 1));
+            Material box3_mat = Material::create_standard(box3_text, 0.6);
+
+            objects.push_back(Object::create_cuboid(Vec3(-0.45, -0.2, 1.4), 0.25, 0.35, 0.25, box3_mat));
+
+            ObjFileMesh cube("models/cube.obj");
+            cube.enlarge(0.07);
+            cube.rotate(PI, 0.4, 0);
+            cube.translate(-0.32, -0.13, 1.55);
+
+            Texture cube_text = Texture::create_gradient();
+            Material cube_mat = Material::create_standard(cube_text, 0);
+
+            Object cube_obj = create_mesh(cube, cube_mat);
+
+            objects.push_back(cube_obj);
+
+            Texture sphere3_text = Texture::create_const_colour(Vec3(1, 1, 1));
+            Material sphere3_mat = Material::create_refractive(sphere3_text, 1.15);
+
+            objects.push_back(Object::create_sphere(Vec3(0.25, -0.45, 1.35), 0.12, sphere3_mat));
         }
 
         void create_cornell_box(Vec3 tl_near_pos, float width, float height, float depth, float light_width) {
@@ -387,12 +449,13 @@ void draw_screen(sf::RenderWindow *window, std::vector<float> pixel_colours) {
 
 
 void init() {
-    Camera camera;
-
-    camera.assign_constant_mem();
-    
+    Camera camera;    
     SceneObjects mesh_data(SCENE_NUM);
     RenderSettings render_data(mesh_data.use_sky);
+
+    mesh_data.set_camera_rot(&camera);
+
+    camera.assign_constant_mem();
 
     allocate_constant_mem(render_data.gpu_struct, mesh_data.gpu_struct);
 }

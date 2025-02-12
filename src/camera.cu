@@ -41,6 +41,10 @@ __host__ __device__ class Camera {
     const float Z_ROT = 0 * (PI / 180);
 
     public:
+        float x_rot = X_ROT;
+        float y_rot = Y_ROT;
+        float z_rot = Z_ROT;
+
         __host__ Camera() {}
 
         __host__ void assign_constant_mem() {
@@ -63,7 +67,7 @@ __host__ __device__ class Camera {
         __host__ Vec3 rotate_point(Vec3 point) {
             //use the matrix operations from object.cu to rotate a point
             std::vector<std::vector<float>> point_items = {{point.x}, {point.y}, {point.z}};
-            Matrix rotated_point = RotationMatrix(RotationMatrix::X_AXIS, X_ROT) * RotationMatrix(RotationMatrix::Y_AXIS, Y_ROT) * RotationMatrix(RotationMatrix::Z_AXIS, Z_ROT) * Matrix(point_items);
+            Matrix rotated_point = RotationMatrix(RotationMatrix::X_AXIS, x_rot) * RotationMatrix(RotationMatrix::Y_AXIS, y_rot) * RotationMatrix(RotationMatrix::Z_AXIS, z_rot) * Matrix(point_items);
 
             return Vec3(rotated_point.items[0][0], rotated_point.items[1][0], rotated_point.items[2][0]);
         }
