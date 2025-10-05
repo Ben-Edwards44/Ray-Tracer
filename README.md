@@ -1,10 +1,24 @@
 # Ray-Tracer
 
-A work in progress ray tracer made with CUDA.
+> A GPU-accelerated ray tracer made from scratch with CUDA
 
-![example 0](/images/image0.png)
-![example 1](/images/image1.png)
-![example 2](/images/image2.png)
+The ray tracer currently supports:
+- Diffuse and specular reflections
+- Emissive materials
+- Refractive materials (like glass)
+- Rendering sphere, triangle and cuboid objects
+- Rendering custom .obj models
+- Custom textures
+
+Demo images:
+
+![demo 0](/images/image0.png)
+
+![demo 1](/images/image1.png)
+
+![demo 2](/images/image2.png)
+
+![demo 3](/images/image3.png)
 
 
 ## References
